@@ -1,0 +1,30 @@
+{% extends "example/base.html" %}
+
+{% block content %}
+    <button class="btn btn-sm btn-secondary" onclick="window.location.href = '{% url 'example:home' %}';">Home</button>
+    <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_create' %}';">Create Task</button>
+    <br><br>
+    <div>
+        <ul>
+            <li>Current User: {{ request.user }}</li>
+            <li>Current Tenant: {{ request.user.tenant }}</li>
+        </ul>
+    </div>
+    <div>
+        <legend>Task List</legend>
+        <dl class="row">
+            <dt class="col-sm-3">Selected Option Name</dt>
+            <dd class="col-sm-9">Details</dd>
+
+            {% for task in tasks %}
+                <dt class="col-sm-3">{{ forloop.counter }} {{ task.title }}</dt>
+                <dd class="col-sm-9">
+                    Priority: {{ task.priority }}; Status: {{ task.status }}
+                    {% if task.user == request.user %}
+                        <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_update' task_id=task.id  %}';">Update</button>
+                    {% endif %}
+                </dd>
+            {% endfor %}
+        </dl>
+    </div>
+{% endblock content %}

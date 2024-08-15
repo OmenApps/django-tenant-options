@@ -1,0 +1,22 @@
+{% extends "example/base.html" %}
+
+{% block content %}
+    <h1>Home</h1>
+    <div>
+        <ul>
+            <li>Current User: {{ request.user }}</li>
+            <li>Current Tenant: {{ request.user.tenant }}</li>
+        </ul>
+    </div>
+    <div>
+        The example project demonstrates the use of <code>django-tenant-options</code> with a simple task management system.
+
+        <legend>URLs for the project:</legend>
+        <ul>
+            <li><a href="{% url 'example:task_list' %}">Task List</a></li>
+            <li><a href="{% url 'example:tenant_list' %}">Tenant List</a></li>
+            <li><a href="{% url 'example:task_priority_list' %}">Task Priority</a></li>
+            <li><a href="{% url 'example:task_status_list' %}">Task Status</a></li>
+        </ul>
+    </div>
+{% endblock content %}

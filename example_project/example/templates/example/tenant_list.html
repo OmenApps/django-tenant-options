@@ -1,0 +1,24 @@
+{% extends "example/base.html" %}
+
+{% block content %}
+    <button class="btn btn-sm btn-secondary" onclick="window.location.href = '{% url 'example:home' %}';">Home</button>
+    <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:tenant_create' %}';">Create Tenant</button>
+    <br><br>
+    <div>
+        <ul>
+            <li>Current User: {{ request.user }}</li>
+            <li>Current Tenant: {{ request.user.tenant }}</li>
+        </ul>
+    </div>
+    <div>
+        <legend>Tenant List</legend>
+        <ul>
+            {% for tenant in tenants %}
+                <li>
+                    {{ forloop.counter }}. Name: {{ tenant.name }}
+                    <button class="btn btn-sm btn-primary ms-2" onclick="window.location.href = '{% url 'example:user_tenant_update' tenant_id=tenant.id  %}';">Change to this Tenant</button>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock content %}

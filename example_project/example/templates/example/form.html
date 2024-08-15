@@ -1,0 +1,30 @@
+{% extends "./base.html" %}
+
+{% load crispy_forms_tags %}
+
+{% block content %}
+    <button class="btn btn-sm btn-secondary" onclick="window.location.href = '{% url 'example:home' %}';">Home</button>
+    <button class="btn btn-sm btn-primary" onclick="history.back()">Back</button>
+    <br><br>
+    <div>
+        <ul>
+            <li>Current User: {{ request.user }}</li>
+            <li>Current Tenant: {{ request.user.tenant }}</li>
+        </ul>
+    </div>
+    <div>
+        {% if form.errors %}
+            <p style="color: red;">Please correct the error{{ form.errors|pluralize }} below.</p>
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <p style="color: red;">{{ error }}</p>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            {% crispy form form.helper %}
+        </form>
+    </div>
+{% endblock content %}

@@ -1,0 +1,29 @@
+{% extends "example/base.html" %}
+
+{% block content %}
+    <button class="btn btn-sm btn-secondary" onclick="window.location.href = '{% url 'example:home' %}';">Home</button>
+    <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_status_selection_create' %}';">Update Task Status Selections</button>
+    <br><br>
+    <div class="">
+        <ul>
+            <li>Current User: {{ request.user }}</li>
+            <li>Current Tenant: {{ request.user.tenant }}</li>
+        </ul>
+    </div>
+    <div class="">
+        <h2>Task Status Selection List</h2>
+
+        Below is the list of all current Selections for a task's priority level for the curent Tenant.
+        <div class="pt-4">
+            <dl class="row">
+                <dt class="col-sm-3">Selected Option Name</dt>
+                <dd class="col-sm-9">Details</dd>
+
+                {% for task_status_selection in task_status_selections %}
+                    <dt class="col-sm-3">{{ task_status_selection.name }}</dt>
+                    <dd class="col-sm-9">Option Type: {{ task_status_selection.get_option_type_display }}; Tenant: {{ task_status_selection.tenant }}</dd>
+                {% endfor %}
+            </dl>
+        </div>
+    </div>
+{% endblock content %}
