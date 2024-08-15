@@ -2,7 +2,7 @@
   "_output_dir": "/home/watervize/omenapps_packages",
   "_template": "./cookiecutter-django-package/",
   "author": "Jack Linke",
-  "copyright_year": "2023",
+  "copyright_year": "2024",
   "development_status": "Development Status :: 1 - Planning",
   "docker_compose_python_version": "3.11",
   "email": "jacklinke@gmail.com",

@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "django-tenant-options"
-version = "2023.10.1"
+version = "2024.8.1"
 description = "Flexible and Extensible Lists of Options for Django"
 authors = ["Jack Linke <jacklinke@gmail.com>"]
 license = "MIT"
@@ -16,11 +16,10 @@ packages = [{ include = "django_tenant_options", from = "src" }]
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 3.2",
-    "Framework :: Django :: 4.0",
-    "Framework :: Django :: 4.1",
     "Framework :: Django :: 4.2",
-    "Development Status :: 1 - Planning",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Development Status :: 3 - Alpha",
 ]
 
 [tool.poetry.urls]
