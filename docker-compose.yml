@@ -1,0 +1,25 @@
+version: "3"
+
+volumes:
+  postgres_data:
+
+services:
+  # django_test:
+  #   build:
+  #     context: .
+  #     dockerfile: ./compose/django/Dockerfile
+  #   image: django_tenant_options_django
+  #   container_name: django_test
+  #   env_file:
+  #     - ./compose/django/.django
+  #   ports:
+  #     - "8111:8111"
+  #   command: /start
+
+  postgres:
+    image: postgres:16
+    container_name: django_test_postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data

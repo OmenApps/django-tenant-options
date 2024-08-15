@@ -1,0 +1,18 @@
+{
+  "_output_dir": "/home/watervize/omenapps_packages",
+  "_template": "./cookiecutter-django-package/",
+  "author": "Jack Linke",
+  "copyright_year": "2023",
+  "development_status": "Development Status :: 1 - Planning",
+  "docker_compose_python_version": "3.11",
+  "email": "jacklinke@gmail.com",
+  "github_owner": "OmenApps",
+  "github_user": "jacklinke",
+  "license": "MIT",
+  "package_description": "Flexible and Extensible Lists of Options for Django",
+  "package_name": "django_tenant_options",
+  "project_name": "django-tenant-options",
+  "use_playwright": "y",
+  "use_postgres": "n",
+  "version": "2023.10.1"
+}
