@@ -20,7 +20,7 @@ logger = logging.getLogger("django_tenant_options")
 
 
 class TenantFormBaseMixin:
-    """Mixin that checks for a valid tenant value passed from the view and hides the tenant field."""
+    """Base mixin that checks for a valid tenant value passed from the view and hides the tenant field."""
 
     def __init__(self, *args, **kwargs):
         self.tenant = self._pop_tenant(kwargs)
@@ -101,7 +101,7 @@ class OptionCreateFormMixin(TenantFormBaseMixin):  # pylint disable=R0903
 
 
 class OptionUpdateFormMixin(OptionCreateFormMixin):  # pylint disable=R0903
-    """Used in forms that allow a tenant to update an existing option.
+    """Used in forms that allow a tenant to update an existing custom option.
 
     Has the same operation and requirements as OptionCreateFormMixin, but also allows the option to be deleted.
 
@@ -139,7 +139,10 @@ class OptionUpdateFormMixin(OptionCreateFormMixin):  # pylint disable=R0903
 
 
 class SelectionsForm(TenantFormBaseMixin, forms.Form):
-    """Creates a form with a `selections` field, defaulting to OptionsModelMultipleChoiceField.
+    """Creates a form with a `selections` field, defaulting to use OptionsModelMultipleChoiceField.
+
+    An alternative field class can be provided via the `DEFAULT_MULTIPLE_CHOICE_FIELD` setting, or by setting
+      the `multiple_choice_field_class` attribute in the form.
 
     Usage:
 
@@ -222,7 +225,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
 
 
 class UserFacingFormMixin:
-    """Mixin for forms allowing a tenant to create a new custom option.
+    """Mixin to handle all user-facing forms with Options.
 
     This mixin requires a `tenant` argument to be passed from the view. The `tenant` should be an instance of the
     model class specified in the `tenant_model` parameter of the concrete `OptionModel`.
@@ -230,6 +233,7 @@ class UserFacingFormMixin:
     The form will:
     - Set the `option_type` field to `OptionType.CUSTOM`.
     - Set the `tenant` field to the tenant instance using a `HiddenInput` widget.
+    - Handle options that are no longer selected by the tenant.
 
     Example usage:
 
