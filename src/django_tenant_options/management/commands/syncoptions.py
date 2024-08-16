@@ -4,7 +4,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from django_tenant_options.models import OptionType
+from django_tenant_options.choices import OptionType
 
 
 logger = logging.getLogger("django_tenant_options")

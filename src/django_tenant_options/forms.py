@@ -9,8 +9,11 @@ from django.db import transaction
 from django.forms.widgets import HiddenInput
 from django.utils import timezone
 
+from django_tenant_options.app_settings import DEFAULT_MULTIPLE_CHOICE_FIELD
+from django_tenant_options.app_settings import DISABLE_FIELD_FOR_DELETED_SELECTION
+from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import NoTenantProvidedFromViewError
-from django_tenant_options.models import OptionType
+from django_tenant_options.helpers import all_option_subclasses
 
 
 logger = logging.getLogger("django_tenant_options")

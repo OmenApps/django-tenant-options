@@ -3,9 +3,9 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from django_tenant_options.choices import OptionType
 from django_tenant_options.models import AbstractOption
 from django_tenant_options.models import AbstractSelection
-from django_tenant_options.models import OptionType
 
 
 User = get_user_model()
