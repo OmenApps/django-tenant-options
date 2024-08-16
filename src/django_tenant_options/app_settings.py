@@ -100,8 +100,8 @@ DEFAULT_MULTIPLE_CHOICE_FIELD = _DJANGO_TENANT_OPTIONS.get(
 DISABLE_FIELD_FOR_DELETED_SELECTION = _DJANGO_TENANT_OPTIONS.get("DISABLE_FIELD_FOR_DELETED_SELECTION", False)
 """bool: The behavior to use in user-facing forms when a selection was deleted by the tenant.
 
-By default, if a selection was deleted, the user must select a new option. If this setting is True, the deleted
-selection will be displayed in the form, but disabled so it cannot be changed.
+By default, if a selection was deleted, the user must select a new option when updating a form. If this setting is
+True, the deleted selection will be displayed in the form, but disabled so it cannot be changed.
 
 In both cases, the deleted selection cannot be used in new forms.
 """
