@@ -18,11 +18,15 @@ try:
     from django.conf import settings
 except ImproperlyConfigured:
     print("**** ImproperlyConfigured")
-    settings = None
+    settings = None  # pylint: disable=C0103
 except ImportError:
     print("**** ImportError")
-    settings = None
+    settings = None  # pylint: disable=C0103
 from django.db import models
+
+from django_tenant_options.form_fields import (  # noqa: F401
+    OptionsModelMultipleChoiceField,
+)
 
 
 _DJANGO_TENANT_OPTIONS = getattr(settings, "DJANGO_TENANT_OPTIONS", {})
@@ -41,6 +45,8 @@ standard `on_delete` arguments](https://docs.djangoproject.com/en/dev/ref/models
 
 OPTION_ON_DELETE = _DJANGO_TENANT_OPTIONS.get("OPTION_ON_DELETE", models.CASCADE)
 """What should happen to Selections when a related Option is deleted.
+
+By default, Options are soft-deleted, so this setting is not used.
 
 This sets the on_delete option for the `option` ForeignKey field on Selection models, and should use one of [django's
 standard `on_delete` arguments](https://docs.djangoproject.com/en/dev/ref/models/fields/#arguments)
@@ -84,4 +90,18 @@ DB_VENDOR_OVERRIDE = _DJANGO_TENANT_OPTIONS.get("DB_VENDOR_OVERRIDE", None)
 
 In some cases, you may use a custom database backend, but the underlying database is still one of the supported
 vendors (e.g. 'postgresql'). In this case, you can specify that supported database vendor here.
+"""
+
+DEFAULT_MULTIPLE_CHOICE_FIELD = _DJANGO_TENANT_OPTIONS.get(
+    "DEFAULT_MULTIPLE_CHOICE_FIELD", OptionsModelMultipleChoiceField
+)
+"""The default form field to use for multiple choice fields. This can also be overridden per form."""
+
+DISABLE_FIELD_FOR_DELETED_SELECTION = _DJANGO_TENANT_OPTIONS.get("DISABLE_FIELD_FOR_DELETED_SELECTION", False)
+"""bool: The behavior to use in user-facing forms when a selection was deleted by the tenant.
+
+By default, if a selection was deleted, the user must select a new option. If this setting is True, the deleted
+selection will be displayed in the form, but disabled so it cannot be changed.
+
+In both cases, the deleted selection cannot be used in new forms.
 """
