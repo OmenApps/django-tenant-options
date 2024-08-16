@@ -126,22 +126,8 @@ class OptionUpdateFormMixin(OptionCreateFormMixin):  # pylint disable=R0903
         return cleaned_data
 
 
-class OptionsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
-    """Displays objects and shows which are mandatory."""
-
-    def label_from_instance(self, obj):
-        """Return a label for each object."""
-        labels = {
-            OptionType.MANDATORY: f"{obj.name} (mandatory)",
-            OptionType.OPTIONAL: f"{obj.name} (optional)",
-            OptionType.CUSTOM: f"{obj.name} (custom)",
-        }
-
-        return labels.get(obj.option_type, obj.name)
-
-
-class SelectionsModelForm(TenantFormBaseMixin, forms.Form):
-    """Creates a form with a `selections` field, using OptionsModelMultipleChoiceField.
+class SelectionsForm(TenantFormBaseMixin, forms.Form):
+    """Creates a form with a `selections` field, defaulting to OptionsModelMultipleChoiceField.
 
     Usage:
 

@@ -23,6 +23,7 @@ from django_tenant_options.app_settings import TENANT_MODEL
 from django_tenant_options.app_settings import TENANT_MODEL_RELATED_NAME
 from django_tenant_options.app_settings import TENANT_MODEL_RELATED_QUERY_NAME
 from django_tenant_options.app_settings import TENANT_ON_DELETE
+from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
 from django_tenant_options.exceptions import InvalidDefaultOption
 
@@ -46,14 +47,6 @@ def validate_model_has_attribute(model, attr: str, attr_type=None):
             raise AttributeError(f"Model {model.__name__} has incorrect type for attribute {attr}.")
     else:
         raise AttributeError(f"Model {model.__name__} is missing attribute {attr}.")
-
-
-class OptionType(models.TextChoices):
-    """Allowable Options Types."""
-
-    MANDATORY = "dm", _("Default Mandatory")  # Tenant can see, but not change this option
-    OPTIONAL = "do", _("Default Optional")  # Tenant can see and select/unselect this option
-    CUSTOM = "cu", _("Custom")  # Tenant created this option and can select/unselect it
 
 
 class TenantOptionsCoreModelBase(ModelBase):
