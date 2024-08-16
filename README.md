@@ -257,6 +257,10 @@ class TaskPrioritySelectionForm(SelectionForm):
 
 Views, Templates, and URLs can be implemented as needed to allow tenants to manage their options. Views tfor forms that use `OptionCreateFormMixin`, `OptionUpdateFormMixin`, and `SelectionForm` must pass the tenant instance to the form's `tenant` attribute.
 
+## Settings
+
+`django-tenant-options` provides a number of settings to configure the behavior of the package. For details on all available settings, see the [App Settings Reference](https://django-tenant-options.readthedocs.io/en/latest/reference.html#module-django_tenant_options.app_settings).
+
 ## Management Commands
 
 `django-tenant-options` provides management commands for easy maintenance:
