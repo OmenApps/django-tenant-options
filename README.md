@@ -73,7 +73,7 @@ In a SaaS environment, one size doesn't fit all. Tenants often have unique needs
 
 ### 5. Other Use-Cases
 
-See additional [use cases](https://django-tenant-options.readthedocs.io/en/latest/usecases/) in the documentation for more inspiration.
+See [the options cookbook](https://django-tenant-options.readthedocs.io/en/latest/optionscookbook.html) in the documentation for more inspiration.
 
 ## Example Implementation
 
@@ -81,7 +81,7 @@ Consider a scenario where your SaaS provides project management tools for busine
 
 > 🟩 Note
 >
-> See the [example project](./exampleproject.md) for the more detailed demonstration of how to set up a multi-tenant application with custom options using `django-tenant-options`.
+> See the [example project](https://django-tenant-options.readthedocs.io/en/latest/exampleproject.html) for the more detailed demonstration of how to set up a multi-tenant application with custom options using `django-tenant-options`.
 
 ### Existing Models
 
@@ -116,12 +116,15 @@ class Task(models.Model):
 
 Each Set of options in `django-tenant-options` is defined by two models: an `Option` model, which stores all mandatory, optional, and custom options, and a `Selection` model, which identifies which options are currently associated with a tenant.
 
-With a `Tenant` model and a `Task` model in your project, you can implement the `TaskPriorityOption` and `TaskPrioritySelection` models as follows:
+With a `Tenant` model and a `Task` model in your project, you can implement the `TaskPriorityOption` and `TaskPrioritySelection` models, which inherit from [`AbstractOption`](https://django-tenant-options.readthedocs.io/en/latest/reference.html#django_tenant_options.models.AbstractOption) and [`AbstractSelection`](https://django-tenant-options.readthedocs.io/en/latest/reference.html#django_tenant_options.models.AbstractSelection) respectively.
+
+In each Option model, you can define the `default_options` dictionary for task priorities or status, including which options are mandatory and which are optional. In this example, "High" and "Low" priorities are mandatory for all tenants (and users will always see these options in forms), while "Critical" and "Medium" priorities are optional for selection by tenants. Tenants can also create custom priorities as needed.
 
 ```python
 from django.db import models
 
-from django_tenant_options.models import AbstractOption, AbstractSelection, OptionType
+from django_tenant_options.models import AbstractOption, AbstractSelection
+from django_tenant_options.choices import OptionType
 
 
 class TaskPriorityOption(AbstractOption):
@@ -132,7 +135,7 @@ class TaskPriorityOption(AbstractOption):
         "Critical": {"option_type": OptionType.OPTIONAL},
         "High": {"option_type": OptionType.MANDATORY},
         "Medium": {"option_type": OptionType.OPTIONAL},
-        "Low": {"option_type": OptionType.MANDATORY},
+        "Low": {},  # If no option_type is provided, it defaults to OptionType.MANDATORY
     }
 
     class Meta(AbstractOption.Meta):
@@ -198,22 +201,60 @@ class Task(models.Model):
 
 ### Forms
 
-`django-tenant-options` provides a set of forms to manage the options and selections for each tenant. You can use these forms in your views to allow tenants to customize their options.
+`django-tenant-options` provides a set of form mixins and fields to manage the options and selections for each tenant. You can use these forms in your views to allow tenants to customize their options.
+
+- `OptionCreateFormMixin` and `OptionUpdateFormMixin` are provided to create and update Options.
+- `SelectionForm` is used to manage the Selections associated with a tenant.
+- `UserFacingFormMixin` is provided to ensures ForeignKey fields to an `AbstractOption` subclass are populated with the correct tenant Selections.
+- `OptionsModelMultipleChoiceField` is a customized `ModelMultipleChoiceField` that retrieves the Options and also displays the option type associated with each Option.
+
+You are encouraged to extend these Mixins and Fields to suit your project's needs.
 
 ```python
 from django import forms
 
-from django_tenant_options.forms import OptionForm, SelectionForm
+from django_tenant_options.forms import OptionCreateFormMixin, OptionUpdateFormMixin, SelectionForm, UserFacingFormMixin
+from example.models import Task, TaskPriorityOption, TaskPrioritySelection
 
+
+class TaskForm(UserFacingFormMixin, forms.ModelForm):
+    """Form for creating and updating a Task."""
+    class Meta:
+        model = Task
+        fields = "__all__"
+
+
+class TaskPriorityOptionCreateForm(OptionCreateFormMixin, forms.ModelForm):
+    """Form for creating a TaskPriorityOption."""
+    class Meta:
+        model = TaskPriorityOption
+        fields = "__all__"
+
+
+class TaskPriorityOptionUpdateForm(OptionUpdateFormMixin, forms.ModelForm):
+    """Form for updating a TaskPriorityOption."""
+    class Meta:
+        model = TaskPriorityOption
+        fields = "__all__"
+
+
+class TaskPrioritySelectionForm(SelectionForm):
+    """Form for selecting TaskPriorityOptions."""
+    class Meta:
+        model = TaskPrioritySelection
 ```
 
-### Management Commands
+### Views, Templates, and URLs
+
+Views, Templates, and URLs can be implemented as needed to allow tenants to manage their options. Views tfor forms that use `OptionCreateFormMixin`, `OptionUpdateFormMixin`, and `SelectionForm` must pass the tenant instance to the form's `tenant` attribute.
+
+## Management Commands
 
 `django-tenant-options` provides management commands for easy maintenance:
 
-- **`listoptions`**: Lists all available options in the database.
-- **`syncoptions`**: Synchronizes the `defaults` in each model with the database when a change in the model has been made. Should always be run after any migrations have been completed.
-- **`maketriggers`**: Creates database trigger migrations to ensure there can never be mismatch between a Tenant and an associated Option.
+- **[`listoptions`](https://django-tenant-options.readthedocs.io/en/latest/reference.html#listoptions)**: Lists all available options in the database.
+- **[`syncoptions`](https://django-tenant-options.readthedocs.io/en/latest/reference.html#syncoptions)**: Synchronizes the `default_options` in each model with the database when a change in the model has been made. Should always be run after any migrations have been completed.
+- **[`maketriggers`](https://django-tenant-options.readthedocs.io/en/latest/reference.html#maketriggers-options)**: Creates database trigger migrations to ensure there can never be mismatch between a Tenant and an associated Option.
 
 ```bash
 python manage.py syncoptions

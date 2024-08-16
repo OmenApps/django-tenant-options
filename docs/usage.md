@@ -26,4 +26,4 @@ DJANGO_TENANT_OPTIONS = {
 }
 ```
 
-For more information on the available settings, see the [`app_settings.py` reference](./reference.md#module-django_tenant_options.app_settings).
+For more information on the available settings, see the [`app_settings.py` reference](https://django-tenant-options.readthedocs.io/en/latest/reference.html#module-django_tenant_options.app_settings).

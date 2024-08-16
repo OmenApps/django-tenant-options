@@ -1,8 +1,8 @@
-# Example Use Cases
+# The Options Cookbook
 
 To help you get started, we have compiled a list of common data categories and their recommended types. These categories can be used as a reference when setting up your options in a multi-tenant application.
 
-In general, for industry-standard categories or statuses, we recommend providing options as mandatory (always displayed in a tenant's user-facing form) or optional (each tenant can choose whether it is displayed to users as an option they can select). For categories or statuses that are specific to a tenant's business or industry, they can create custom options to meet their unique needs.
+In general, for industry-standard categories or statuses, we recommend providing options as mandatory (always displayed in a tenant's user-facing form) or optional (each tenant can choose whether it is displayed to users as an option they can select). For categories or statuses that are specific to a tenant's business or organization, they can create custom options to meet their unique needs.
 
 > 🟩 Note
 >
@@ -209,6 +209,37 @@ In general, for industry-standard categories or statuses, we recommend providing
 | Object storage                 | Optional                       |
 | Hybrid drive                   | Tenant-Specific Custom Option  |
 | Rock carving storage           | Tenant-Specific Custom Option  |
+
+## Infrastructure - Road Types
+
+| Option            | Recommended Type               |
+|-------------------|--------------------------------|
+| Highway           | Mandatory                      |
+| Street            | Mandatory                      |
+| Avenue            | Mandatory                      |
+| Lane              | Mandatory                      |
+| Boulevard         | Optional                       |
+| Alley             | Optional                       |
+| Freeway           | Optional                       |
+| Expressway        | Optional                       |
+| Parkway           | Optional                       |
+| Bike path         | Tenant-Specific Custom Option  |
+
+## Insurance - Policy Types
+
+| Option                    | Recommended Type               |
+|---------------------------|--------------------------------|
+| Life                      | Mandatory                      |
+| Health                    | Mandatory                      |
+| Auto                      | Mandatory                      |
+| Homeowners                | Mandatory                      |
+| Renters                   | Mandatory                      |
+| Disability                | Optional                       |
+| Long-term care            | Optional                       |
+| Travel                    | Optional                       |
+| Pet                       | Optional                       |
+| Business                  | Optional                       |
+| Alien abduction           | Tenant-Specific Custom Option  |
 
 ## Learning Management System (LMS) - Course Categories & Grading Schemes
 
