@@ -4,8 +4,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "django-tenant-options"
-version = "2024.8.1"
-description = "Flexible and Extensible Lists of Options for Django"
+version = "2024.8.2"
+description = "Empowering Your SaaS Tenants with Custom Options and Sane Defaults"
 authors = ["Jack Linke <jacklinke@gmail.com>"]
 license = "MIT"
 readme = "README.md"
