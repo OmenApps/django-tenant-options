@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
     """Adds an auto-generated trigger for a django-tenant-options Selection model."""
 
     dependencies = [
-        ('example', '0003_auto_trigger_taskpriorityselection'),
+        ("example", "0003_auto_trigger_taskpriorityselection"),
     ]
 
     operations = [
