@@ -12,7 +12,8 @@ from django.forms.widgets import HiddenInput
 
 from django_tenant_options.forms import OptionCreateFormMixin
 from django_tenant_options.forms import OptionUpdateFormMixin
-from django_tenant_options.forms import SelectionsModelForm
+from django_tenant_options.forms import SelectionsForm
+from django_tenant_options.forms import UserFacingFormMixin
 
 from .models import Task
 from .models import TaskPriorityOption
@@ -34,12 +35,10 @@ class TaskForm(UserFacingFormMixin, ModelForm):
         model = Task
         fields = "__all__"
 
-    def __init__(self, *args, tenant=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         """Initialize TaskForm with a tenant."""
         self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
-        self.fields["priority"].queryset = TaskPrioritySelection.objects.selected_options_for_tenant(tenant=tenant)
-        self.fields["status"].queryset = TaskStatusSelection.objects.selected_options_for_tenant(tenant=tenant)
 
         self.data = self.data.copy()
         self.data.update(user=User.objects.filter(id=self.request.user.id).first().pk)
@@ -91,6 +90,7 @@ class TaskStatusOptionCreateForm(OptionCreateFormMixin, ModelForm):
         """Meta class for TaskStatusOptionCreateForm."""
 
         model = TaskStatusOption
+        # Speifying the fields explicitly
         fields = ["name", "option_type", "tenant", "deleted"]
 
     def __init__(self, *args, **kwargs):
@@ -116,6 +116,7 @@ class TaskStatusOptionUpdateForm(OptionUpdateFormMixin, ModelForm):
         """
 
         model = TaskStatusOption
+        # Specifying the fields implicitly
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
@@ -185,6 +186,7 @@ class TaskStatusSelectionForm(SelectionsForm):
         """Meta class for TaskStatusSelectionForm."""
 
         model = TaskStatusSelection
+        # We do not need to specify the fields, as they are automatically generated based on the model.
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -202,13 +204,14 @@ class TaskStatusSelectionForm(SelectionsForm):
         )
 
 
-class TaskPrioritySelectionForm(SelectionsModelForm):
+class TaskPrioritySelectionForm(SelectionsForm):
     """Form for creating TaskPrioritySelection instances."""
 
     class Meta:
         """Meta class for TaskPrioritySelectionForm."""
 
         model = TaskPrioritySelection
+        # We do not need to specify the fields, as they are automatically generated based on the model.
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
