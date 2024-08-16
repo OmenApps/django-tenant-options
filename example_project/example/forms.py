@@ -153,7 +153,32 @@ class TaskPriorityOptionCreateForm(OptionCreateFormMixin, ModelForm):
         )
 
 
-class TaskStatusSelectionForm(SelectionsModelForm):
+class TaskPriorityOptionUpdateForm(OptionUpdateFormMixin, ModelForm):
+    """Form for updating TaskPriorityOption instances."""
+
+    class Meta:
+        """Meta class for TaskPriorityOptionUpdateForm.
+
+        If the delete field is checked, the TaskPriorityOption `deleted` field will be set to the current datetime.
+        """
+
+        model = TaskPriorityOption
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.layout = Layout(
+            Fieldset(
+                "Create or Update Task Priority Option",
+                HTML("<p>Note: Only custom Options can be created or updated here.</p>"),
+                *self.fields.keys(),
+            ),
+            Submit("submit", "Submit", css_class="button white"),
+        )
+
+
+class TaskStatusSelectionForm(SelectionsForm):
     """Form for creating TaskStatusSelection instances."""
 
     class Meta:
