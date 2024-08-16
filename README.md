@@ -23,6 +23,15 @@
 
 `django-tenant-options` provides a powerful and flexible way for your SaaS application’s tenants to customize the selectable options in user-facing forms. This package allows you to offer a balance between providing default options—either mandatory or optional—and giving your tenants the freedom to define their own custom choices, all within a structured framework that ensures consistency and ease of use.
 
+## So your SaaS tenants want to provide end users with choices in a form...
+
+*How can you implement this?*
+
+- **CharField with TextChoices or IntegerChoices**: Define a fixed set of options in your model. This approach is inflexible and doesn't allow for any customization by tenants. What one tenant needs may not be what another tenant needs.
+- **ManyToManyField with a custom model**: Create a custom model to store options and use a ManyToManyField in your form. But what if one tenant wants to add a new option? Or if you would like to provide some default options? Or if not every tenant needs to show all of your defaults?
+- **JSON Fields**: Store custom options as JSON in a single field. This can be difficult to query and manage, and doesn't provide a structured way to define defaults. And it has all of the problems of the ManyToManyField approach.
+- **`django-tenant-options`**: A structured and flexible solution that allows tenants to define their own sets of values for form input while still allowing you, the developer, to offer global defaults (both mandatory and optional).
+
 ## Why Use django-tenant-options?
 
 In a SaaS environment, one size doesn't fit all. Tenants often have unique needs for the choices they offer in user-facing forms, but building an entirely custom solution for each tenant - or requiring each tenant to define their own options from scratch - can be complex and time-consuming. `django-tenant-options` addresses this challenge by offering:
