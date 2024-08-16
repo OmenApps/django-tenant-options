@@ -14,4 +14,4 @@ class NoTenantProvidedFromViewError(Exception):
 
 
 class InvalidDefaultOption(Exception):
-    """Used when the default option provided is not `OptionType.MANDATORY` or `OptionType.OPTIONAL`."""
+    """Used when a default option defined in a model is not `OptionType.MANDATORY` or `OptionType.OPTIONAL`."""

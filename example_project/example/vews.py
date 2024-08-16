@@ -31,7 +31,6 @@ def home(request):
 
     In this view, we also set the current Tenant for the User if it is not already set, for example purposes only.
     """
-    logger.warning(_("This is a warning message."))
     if not request.user.tenant:
         request.user.tenant = Tenant.objects.first()
         request.user.save()

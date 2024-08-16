@@ -17,7 +17,7 @@ class Tenant(models.Model):
     name = models.CharField(max_length=100)
     subdomain = models.CharField(max_length=100, unique=True)
 
-    def __str__(self):
+    def __str__(self):  # pylint: disable=E0307
         return self.name
 
 
@@ -47,7 +47,7 @@ class Task(models.Model):
         related_name="tasks",
     )
 
-    def __str__(self):
+    def __str__(self):  # pylint: disable=E0307
         return self.title
 
 

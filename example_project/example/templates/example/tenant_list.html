@@ -14,7 +14,7 @@
         <legend>Tenant List</legend>
         <ul>
             {% for tenant in tenants %}
-                <li>
+                <li class="mb-2">
                     {{ forloop.counter }}. Name: {{ tenant.name }}
                     <button class="btn btn-sm btn-primary ms-2" onclick="window.location.href = '{% url 'example:user_tenant_update' tenant_id=tenant.id  %}';">Change to this Tenant</button>
                 </li>
