@@ -25,7 +25,7 @@ from .models import Tenant
 User = get_user_model()
 
 
-class TaskForm(ModelForm):
+class TaskForm(UserFacingFormMixin, ModelForm):
     """Form for creating Task instances."""
 
     class Meta:
