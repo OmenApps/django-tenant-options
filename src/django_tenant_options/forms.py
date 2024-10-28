@@ -188,19 +188,28 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
     def clean(self):
         """Ensure `selections` include mandatory options and identify removed selections."""
         cleaned_data = super().clean()
-        cleaned_data["selections"] = self._combine_selections_and_mandatory(cleaned_data["selections"])
+        cleaned_data["selections"] = self._combine_selections_and_mandatory(cleaned_data.get("selections", []))
         self.removed_selections = self._identify_removed_selections(cleaned_data["selections"])
         logger.debug("cleaned_data: %s", cleaned_data)
         return cleaned_data
 
     def _combine_selections_and_mandatory(self, selections):
         """Combine the selections with mandatory options."""
+        if selections is None:
+            selections = self.option_model.objects.none()
         mandatory_options = self.option_model.objects.filter(option_type=OptionType.MANDATORY)
         return (selections | mandatory_options).distinct()
 
     def _identify_removed_selections(self, selections):
         """Identify options removed from the selection by the user."""
-        return self.option_model.objects.exclude(id__in=selections).exclude(option_type=OptionType.MANDATORY)
+        current_selections = self.selection_model.objects.filter(tenant=self.tenant, deleted__isnull=True).values_list(
+            "option_id", flat=True
+        )
+
+        # Exclude mandatory options and get currently selected options that aren't in the new selections
+        return self.option_model.objects.filter(
+            id__in=current_selections, option_type__in=[OptionType.OPTIONAL, OptionType.CUSTOM]
+        ).exclude(id__in=selections.values_list("id", flat=True))
 
     def save(self, *args, **kwargs):
         """Save the selections to the database, handling added and removed options."""
@@ -214,7 +223,9 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
 
     def _delete_removed_selections(self):
         """Delete any selections that were removed."""
-        self.selection_model.objects.filter(option__in=self.removed_selections).delete()
+        self.selection_model.objects.filter(
+            tenant=self.tenant, option__in=self.removed_selections, deleted__isnull=True
+        ).delete()
 
     def _save_new_selections(self):
         """Create or update the selections that were added."""
@@ -253,7 +264,6 @@ class UserFacingFormMixin:
         if not self.tenant:
             raise NoTenantProvidedFromViewError("No tenant model class was provided to the form from the view")
         super().__init__(*args, **kwargs)
-
         self._initialize_tenant_field()
         self._remove_associated_tenants_field()
         self._filter_foreign_key_fields()
@@ -280,23 +290,27 @@ class UserFacingFormMixin:
 
     def _is_foreign_key_to_option_subclass(self, field, option_subclasses):
         """Check if the field is a ForeignKey to an AbstractOption subclass."""
-        return hasattr(field, "queryset") and field.queryset.model in option_subclasses
+        return (
+            isinstance(field, forms.ModelChoiceField)
+            and field.queryset is not None
+            and field.queryset.model in option_subclasses
+        )
 
     def _filter_queryset_for_tenant(self, field):
         """Filter the queryset to only show options selected for the tenant."""
-        field.queryset = field.queryset.model.objects.selected_options_for_tenant(self.tenant)
+        field.queryset = field.queryset.model.objects.options_for_tenant(self.tenant)
 
     def _handle_deleted_selection(self, field, field_name):
         """Handle the case where a selection has been deleted."""
         if hasattr(self, "instance") and hasattr(self.instance, "pk") and self.instance.pk:
             option_for_this_field = getattr(self.instance, field_name)
-            if option_for_this_field not in field.queryset:
+            if option_for_this_field and option_for_this_field not in field.queryset:
                 self._disable_field_for_deleted_selection(field, option_for_this_field)
 
     def _disable_field_for_deleted_selection(self, field, option_for_this_field):
         """Disable the field if the selected option has been deleted and is no longer valid."""
-        if DISABLE_FIELD_FOR_DELETED_SELECTION and hasattr(option_for_this_field, "pk"):
-            field.queryset = field.queryset.model.objects.filter(pk=option_for_this_field.pk)
+        if DISABLE_FIELD_FOR_DELETED_SELECTION and option_for_this_field.pk:
+            field.queryset = field.queryset | field.queryset.model.objects.filter(pk=option_for_this_field.pk)
             field.widget.attrs["readonly"] = "readonly"
             field.widget.attrs["disabled"] = "disabled"
 

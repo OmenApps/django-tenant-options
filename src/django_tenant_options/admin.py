@@ -16,13 +16,15 @@ class BaseOptionsAdminMixin:
 
 
 class BaseOptionsAdmin(BaseOptionsAdminMixin, admin.ModelAdmin):
-    pass
+    """Base class for Options Admin classes"""
 
 
 class SelectionsAdminMixin:
+    """Mixin providing functionality specific to Selections models"""
+
     search_fields = []
     list_display = []
 
 
 class BaseSelectionsAdmin(SelectionsAdminMixin, admin.ModelAdmin):
-    pass
+    """Base class for Selections Admin classes"""

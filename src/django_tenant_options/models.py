@@ -205,17 +205,15 @@ class OptionQuerySet(models.QuerySet):
 
         Set `include_deleted=True` to include deleted options.
         """
-        if include_deleted:
-            return self.model.objects.filter(
-                Q(option_type=OptionType.MANDATORY)
-                | Q(option_type=OptionType.OPTIONAL)
-                | Q(option_type=OptionType.CUSTOM, tenant=tenant)
-            )
-        return self.model.objects.active().filter(
+        base_query = (
             Q(option_type=OptionType.MANDATORY)
             | Q(option_type=OptionType.OPTIONAL)
             | Q(option_type=OptionType.CUSTOM, tenant=tenant)
         )
+
+        if include_deleted:
+            return self.filter(base_query)
+        return self.active().filter(base_query)
 
     def selected_options_for_tenant(self, tenant, include_deleted=False) -> models.QuerySet:
         """Returns a QuerySet of the AbstractOption subclassed model.
@@ -231,50 +229,30 @@ class OptionQuerySet(models.QuerySet):
         logger.debug("Called selected_options_for_tenant in OptionQuerySet with %s, %s", tenant, include_deleted)
 
         try:
-
-            SelectionModel = self.model.associated_tenants.through  # pylint: disable=C0103
+            SelectionModel = self.model.associated_tenants.through
             selections = SelectionModel.objects.active().filter(tenant=tenant).values_list("option", flat=True)
 
-            # Return all Mandatory Option instances
-            mandatory = {
-                "option_type": OptionType.MANDATORY,
-            }
-
-            # For Selections that are Optional and belong to our tenant, return the associated Option instances
-            optional = {
-                "option_type": OptionType.OPTIONAL,
-                "associated_tenants__in": [tenant],
-            }
-
-            # For Selections that are Custom and belong to our tenant, return the associated Option instances
-            custom = {
-                "option_type": OptionType.CUSTOM,
-                "associated_tenants__in": [tenant],
-            }
-
-            if include_deleted:
-                return self.filter(Q(**mandatory) | Q(**optional) | Q(**custom)).filter(
-                    Q(id__in=selections) | Q(**mandatory)
-                )
-
-            return (
-                self.active()
-                .filter(Q(**mandatory) | Q(**optional) | Q(**custom))
-                .filter(Q(id__in=selections) | Q(**mandatory))
+            base_query = Q(option_type=OptionType.MANDATORY) | (
+                Q(id__in=selections)
+                & (Q(option_type=OptionType.OPTIONAL) | Q(option_type=OptionType.CUSTOM, tenant=tenant))
             )
 
+            if include_deleted:
+                return self.filter(base_query)
+            return self.active().filter(base_query)
+
         except LookupError:
-            # no such model in this application
             return self.none()
 
     def undelete(self):
-        """Update all records in the current QuerySet remove the deleted timestamp."""
+        """Update all records in the current QuerySet to remove the deleted timestamp."""
         return self.update(deleted=None)
 
     def delete(self, override=False):
-        """Delete all the records in the current QuerySet.
+        """Delete the records in the current QuerySet.
 
-        Setting `override=True` will fall back to the default delete method, hard-deleting the records.
+        Args:
+            override: If True, perform a hard delete. Otherwise, perform a soft delete.
         """
         if override:
             return super().delete()
@@ -291,15 +269,15 @@ class OptionManager(models.Manager):
 
     def create_for_tenant(self, tenant, name: str):
         """Provided a tenant and a option name, creates the new option for that tenant."""
-        self.create(tenant=tenant, name=name, option_type=OptionType.CUSTOM)
+        return self.create(tenant=tenant, name=name, option_type=OptionType.CUSTOM)
 
     def create_mandatory(self, name: str):
-        """Provided a option name, creates the new option (selected for all tenants)."""
-        self.create(name=name, option_type=OptionType.MANDATORY)
+        """Provided an option name, creates the new option (mandatorily selected for all tenants)."""
+        return self.create(name=name, option_type=OptionType.MANDATORY)
 
     def create_optional(self, name: str):
-        """Provided a option name, creates the new optional option (selectable by all tenants)."""
-        self.create(name=name, option_type=OptionType.OPTIONAL)
+        """Provided an option name, creates the new optional option (selectable by all tenants)."""
+        return self.create(name=name, option_type=OptionType.OPTIONAL)
 
     def _update_or_create_default_option(self, item_name: str, options_dict: dict = dict):
         """Updates or creates a single default Mandatory or Optional option.
@@ -334,7 +312,7 @@ class OptionManager(models.Manager):
         """Import default options, and soft-delete MANDATORY & OPTIONAL options that are no longer in the default list.
 
         Steps:
-        - Get the default options from `Model.objects.default_options`
+        - Get the default options from `Model.default_options`
         - Create instances if they do not already exist or update if options have changed
         - Soft-delete options that are no longer in the default list by setting `deleted` to the current time
         - Add the `deleted` key to the default options dict
@@ -355,28 +333,24 @@ class OptionManager(models.Manager):
         """
         validate_model_is_concrete(self.model)
 
-        updated_options = self.model.default_options
+        updated_options = {}
+        default_options = getattr(self.model, "default_options", {})
 
-        # Create or update the default options
-        try:
-            for item_name, options_dict in updated_options.items():
-                self.model.objects._update_or_create_default_option(item_name, options_dict)  # pylint: disable=W0212
-        except AttributeError as e:
-            logger.error(e)
-        except Exception as e:  # pylint: disable=W0703
-            logger.error(e)
+        # Create or update default options
+        for name, options_dict in default_options.items():
+            try:
+                self.model.objects._update_or_create_default_option(name, options_dict)
+                updated_options[name] = options_dict
+            except Exception as e:
+                logger.error(f"Error updating option {name}: {e}")
 
-        # Get list of existing Options that are not in the updated_options list
-        updated_options_name_list = updated_options.keys()
-        existing_options_for_delete = (
-            self.model.objects.filter(deleted__isnull=True)
-            .filter(option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL])
-            .exclude(name__in=updated_options_name_list)
-        )
+        # Soft delete options no longer in defaults
+        existing_options = self.model.objects.filter(
+            option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL], deleted__isnull=True
+        ).exclude(name__in=default_options.keys())
 
-        # Soft-delete options that are no longer in the default list and add them to the updated_options dict
-        for option in existing_options_for_delete:
-            option.delete(override=True)
+        for option in existing_options:
+            option.delete()
             updated_options[option.name] = {"deleted": True}
 
         return updated_options
@@ -438,7 +412,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
             # Options of type OptionType.CUSTOM must have a specified tenant, and Options of
             # type OptionType.MANDATORY and OptionType.OPTIONAL must not have a specified tenant
             CheckConstraint(
-                check=Q(option_type=OptionType.CUSTOM, tenant__isnull=False)
+                condition=Q(option_type=OptionType.CUSTOM, tenant__isnull=False)
                 | Q(option_type=OptionType.MANDATORY, tenant__isnull=True)
                 | Q(option_type=OptionType.OPTIONAL, tenant__isnull=True),
                 name="%(app_label)s_%(class)s_tenant_check",
@@ -447,10 +421,24 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
         abstract = True
 
     def delete(self, using=None, keep_parents=False, override=False):
-        """Soft-delete options to prevent referencing an option that no longer exists."""
-        if self.option_type == OptionType.CUSTOM or override:
-            self.deleted = timezone.now()
-            self.save()
+        """Delete the option, with option for hard delete.
+
+        Args:
+            using: Database alias to use
+            keep_parents: Whether to keep parent models
+            override: If True, perform a hard delete. Otherwise, perform a soft delete.
+        """
+        if override:
+            # Update related selections
+            selection_model_class = apps.get_model(self.selection_model)
+            selection_model_class.objects.filter(option=self).update(deleted=timezone.now())
+            # Hard delete
+            result = super().delete(using=using, keep_parents=keep_parents)
+            return result
+
+        # Soft delete
+        self.deleted = timezone.now()
+        self.save()
 
     def __str__(self):
         """Return the name of the option."""
@@ -501,11 +489,15 @@ class SelectionQuerySet(models.QuerySet):
         return self.filter(deleted__isnull=False)
 
     def undelete(self):
-        """Return only deleted selections."""
+        """Update all records in the current QuerySet to remove deleted timestamp."""
         return self.update(deleted=None)
 
     def delete(self, override=False):
-        """Delete the records in the current QuerySet."""
+        """Delete the records in the current QuerySet.
+
+        Args:
+            override: If True, perform a hard delete. Otherwise, perform a soft delete.
+        """
         if override:
             return super().delete()
         return self.update(deleted=timezone.now())
@@ -615,8 +607,16 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
         super().save(*args, **kwargs)
 
     def delete(self, using=None, keep_parents=False, override=False):
-        """Soft-delete options to prevent referencing an option that no longer exists."""
-        if self.option.option_type == OptionType.CUSTOM or override:
+        """Delete the selection, with option for hard delete.
+
+        Args:
+            using: Database alias to use
+            keep_parents: Whether to keep parent models
+            override: If True, perform a hard delete. Otherwise, perform a soft delete
+        """
+        if override:
+            return super().delete(using=using, keep_parents=keep_parents)
+        else:
             self.deleted = timezone.now()
             self.save()
 
