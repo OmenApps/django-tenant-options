@@ -21,32 +21,38 @@
 
 **Empowering Your SaaS Tenants with Custom Options and Sane Defaults**
 
-`django-tenant-options` provides a powerful and flexible way for your SaaS application’s tenants to customize the selectable options in user-facing forms. This package allows you to offer a balance between providing default options—either mandatory or optional—and giving your tenants the freedom to define their own custom choices, all within a structured framework that ensures consistency and ease of use.
-
 ## So your SaaS tenants want to provide end users with choices in a form...
 
 *How can you implement this?*
 
-- **CharField with TextChoices or IntegerChoices**: Define a fixed set of options in your model. This approach is inflexible and doesn't allow for any customization by tenants. What one tenant needs may not be what another tenant needs.
-- **ManyToManyField with a custom model**: Create a custom model to store options and use a ManyToManyField in your form. But what if one tenant wants to add a new option? Or if you would like to provide some default options? Or if not every tenant needs to show all of your defaults?
-- **JSON Fields**: Store custom options as JSON in a single field. This can be difficult to query and manage, and doesn't provide a structured way to define defaults. And it has all of the problems of the ManyToManyField approach.
-- **`django-tenant-options`**: A structured and flexible solution that allows tenants to define their own sets of values for form input while still allowing you, the developer, to offer global defaults (both mandatory and optional).
+- **CharField with TextChoices or IntegerChoices**: Define a fixed set of options in your model.
+  - ❌ One size fits all
+  - ❌ No customization for tenants
+  - ❌ Code changes required for new options
+- **ManyToManyField with a custom model**: Create a custom model to store options and use a ManyToManyField in your form.
+  - ❌ No distinction between tenant options
+  - ❌ Complex to manage defaults
+  - ❌ Hard to maintain consistency
+- **JSON Fields**: Store custom options as JSON in a single field.
+  - ❌ No schema validation
+  - ❌ No referential integrity
+- **Custom Tables Per Tenant**
+  - ❌ Schema complexity
+  - ❌ Migration nightmares
+  - ❌ Performance issues
+- **django-tenant-options**:
+  - ✅ Structured and flexible
+  - ✅ Allows tenants to define their own sets of values for form inputs
+  - ✅ Allows you, the developer, to offer global defaults (both mandatory and optional)
 
-## Why Use django-tenant-options?
-
-In a SaaS environment, one size doesn't fit all. Tenants often have unique needs for the choices they offer in user-facing forms, but building an entirely custom solution for each tenant - or requiring each tenant to define their own options from scratch - can be complex and time-consuming. `django-tenant-options` addresses this challenge by offering:
-
-- **Flexibility**: Tenants can tailor the options available in forms to better meet their specific needs.
-- **Control**: Provide mandatory defaults to maintain a consistent experience across all tenants, while still allowing for customization.
-- **Scalability**: Easily manage multiple tenants with differing requirements without compromising on performance or maintainability.
-- **Simplicity**: Avoid the complexity of dynamic models or JSON fields, offering a more structured and maintainable solution.
+In a SaaS environment, one size doesn't fit all. Tenants often have unique needs for the choices they offer in user-facing forms, but building an entirely custom solution for each tenant - or requiring each tenant to define their own options from scratch - can be complex and time-consuming.
 
 ## Key Features
 
 - **Customizable Options**: Allow tenants to define their own sets of values for form input while still offering global defaults.
 - **Mandatory and Optional Defaults**: Define which options are mandatory for all tenants and which can be optionally used by tenants in their forms.
-- **Seamless Integration**: Designed to work smoothly with your existing Django models, making it easy to integrate into your project.
-- **Tenant-Specific Logic**: Built-in support for tenant-specific logic, ensuring that each tenant’s unique needs are met.
+- **Seamless Integration**: Works with your existing Django models, making it easy to integrate into your project.
+- **Tenant-Specific Logic**: Built-in support for tenant-specific logic, so each tenant’s unique needs can be met.
 
 ## Potential Use-Cases
 
@@ -99,7 +105,6 @@ We will define a very basic `Tenant` model and a `Task` model to illustrate the 
 ```python
 from django.contrib.auth import get_user_model
 from django.db import models
-
 
 User = get_user_model()
 
@@ -172,7 +177,6 @@ from django.db import models
 
 from example.models import TaskPriorityOption, TaskStatusOption, User
 
-
 User = get_user_model()
 
 
@@ -210,7 +214,9 @@ class Task(models.Model):
 
 ### Forms
 
-`django-tenant-options` provides a set of form mixins and fields to manage the options and selections for each tenant. You can use these forms in your views to allow tenants to customize their options.
+`django-tenant-options` provides a set of form mixins and fields to manage the options and selections for each tenant.
+
+You can use these forms in your views to allow tenants to customize their options.
 
 - `OptionCreateFormMixin` and `OptionUpdateFormMixin` are provided to create and update Options.
 - `SelectionForm` is used to manage the Selections associated with a tenant.
@@ -275,6 +281,6 @@ python manage.py syncoptions
 
 ## Conclusion
 
-`django-tenant-options` makes it easy to provide your SaaS application’s tenants with customizable form options, while still maintaining the consistency and control needed to ensure a smooth user experience. Whether you're managing project tasks, HR roles, marketplace filters, or any other customizable value sets, this package offers a robust solution.
+`django-tenant-options` makes it easy to provide your SaaS application’s tenants with customizable form options, while maintaining consistency and control.
 
 Explore the [full documentation](https://django-tenant-options.readthedocs.io/en/latest/) for more details and start empowering your tenants today!

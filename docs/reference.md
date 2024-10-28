@@ -120,3 +120,9 @@
     (`int`) Provide detailed output of the migration creation process.
 ```
 
+
+### `removetriggers`
+
+```{eval-rst}
+.. autoclass:: django_tenant_options.management.commands.removetriggers.Command
+```
