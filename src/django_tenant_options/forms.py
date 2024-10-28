@@ -139,23 +139,7 @@ class OptionUpdateFormMixin(OptionCreateFormMixin):  # pylint disable=R0903
 
 
 class SelectionsForm(TenantFormBaseMixin, forms.Form):
-    """Creates a form with a `selections` field, defaulting to use OptionsModelMultipleChoiceField.
-
-    An alternative field class can be provided via the `DEFAULT_MULTIPLE_CHOICE_FIELD` setting, or by setting
-      the `multiple_choice_field_class` attribute in the form.
-
-    Usage:
-
-    .. code-block:: python
-
-        class MyModelForm(SelectionsForm):
-            class Meta:
-                model = TenantCropSelection
-
-        def my_selections_view(request):
-            form = MyModelForm(request.POST, tenant=request.user.tenant)
-
-    """
+    """Creates a form with a `selections` field for managing tenant selections."""
 
     def __init__(self, *args, **kwargs):
         self._meta = self.Meta
@@ -225,7 +209,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
         """Delete any selections that were removed."""
         self.selection_model.objects.filter(
             tenant=self.tenant, option__in=self.removed_selections, deleted__isnull=True
-        ).delete()
+        ).update(deleted=timezone.now())
 
     def _save_new_selections(self):
         """Create or update the selections that were added."""
@@ -236,28 +220,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
 
 
 class UserFacingFormMixin:
-    """Mixin to handle all user-facing forms with Options.
-
-    This mixin requires a `tenant` argument to be passed from the view. The `tenant` should be an instance of the
-    model class specified in the `tenant_model` parameter of the concrete `OptionModel`.
-
-    The form will:
-    - Set the `option_type` field to `OptionType.CUSTOM`.
-    - Set the `tenant` field to the tenant instance using a `HiddenInput` widget.
-    - Handle options that are no longer selected by the tenant.
-
-    Example usage:
-
-    .. code-block:: python
-
-        class MyOptionCreateForm(UserFacingFormMixin, forms.ModelForm):
-            class Meta:
-                model = MyConcreteOptionModel
-                fields = "__all__"
-
-        def my_options_view(request):
-            form = MyOptionCreateForm(request.POST, tenant=request.user.tenant)
-    """
+    """Mixin to handle user-facing forms with Options fields."""
 
     def __init__(self, *args, **kwargs):
         self.tenant = kwargs.pop("tenant", None)
@@ -286,6 +249,7 @@ class UserFacingFormMixin:
             if self._is_foreign_key_to_option_subclass(field, option_subclasses):
                 logger.debug("field_name: %s for field: %s", field_name, field)
                 self._filter_queryset_for_tenant(field)
+                self._set_field_initial_value(field_name)
                 self._handle_deleted_selection(field, field_name)
 
     def _is_foreign_key_to_option_subclass(self, field, option_subclasses):
@@ -300,22 +264,29 @@ class UserFacingFormMixin:
         """Filter the queryset to only show options selected for the tenant."""
         field.queryset = field.queryset.model.objects.options_for_tenant(self.tenant)
 
+    def _set_field_initial_value(self, field_name):
+        """Set the initial value for the field if there's an instance."""
+        if hasattr(self, "instance") and hasattr(self.instance, "pk") and self.instance.pk:
+            field_value = getattr(self.instance, field_name)
+            if field_value:
+                self.fields[field_name].initial = field_value.pk
+
     def _handle_deleted_selection(self, field, field_name):
         """Handle the case where a selection has been deleted."""
         if hasattr(self, "instance") and hasattr(self.instance, "pk") and self.instance.pk:
             option_for_this_field = getattr(self.instance, field_name)
             if option_for_this_field and option_for_this_field not in field.queryset:
-                self._disable_field_for_deleted_selection(field, option_for_this_field)
+                self._handle_disabled_field_for_deleted_selection(field, option_for_this_field)
 
-    def _disable_field_for_deleted_selection(self, field, option_for_this_field):
-        """Disable the field if the selected option has been deleted and is no longer valid."""
+    def _handle_disabled_field_for_deleted_selection(self, field, option_for_this_field):
+        """Disable the field if the selected option has been deleted and setting is enabled."""
         if DISABLE_FIELD_FOR_DELETED_SELECTION and option_for_this_field.pk:
             field.queryset = field.queryset | field.queryset.model.objects.filter(pk=option_for_this_field.pk)
             field.widget.attrs["readonly"] = "readonly"
             field.widget.attrs["disabled"] = "disabled"
 
     def clean(self):
-        """Ensure the tenant is correct even if the HiddenField was manipulated."""
+        """Ensure the tenant is correct even if HiddenField was manipulated."""
         cleaned_data = super().clean()
         cleaned_data["tenant"] = self.tenant
         return cleaned_data
