@@ -1,56 +1,103 @@
-"""Management command to generate migrations with triggers for models subclassed from AbstractSelection."""
+"""Management command to generate database trigger migrations for models subclassed from AbstractSelection.
+
+This module provides a Django management command that automatically generates database migrations
+containing triggers for models that inherit from AbstractSelection. These triggers ensure data
+integrity by preventing mismatches between Tenants and their associated Options.
+"""
+
+from __future__ import annotations
 
 import hashlib
-import os
 import re
+from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from textwrap import dedent
+from typing import Literal
+from typing import Optional
+from typing import Type
 
+from django.apps import AppConfig
 from django.apps import apps
 from django.core.management.base import BaseCommand
+from django.core.management.base import CommandParser
 from django.db import connection
 from django.db.migrations.recorder import MigrationRecorder
+from django.db.models import Model
 
 from django_tenant_options.app_settings import DB_VENDOR_OVERRIDE
 from django_tenant_options.models import AbstractSelection
 
 
+# Type aliases for supported database vendors
+DBVendor = Literal["sqlite", "postgresql", "mysql", "oracle"]
+
+
+@dataclass
+class MigrationContext:
+    """Contains context information for migration generation."""
+
+    app_label: str
+    model_name: str
+    db_table: str
+    trigger_name: str
+    migration_name: Optional[str] = None
+
+
 class Command(BaseCommand):
-    """Management command to generate migrations with triggers for models subclassed from AbstractSelection."""
+    """Management command to generate trigger migrations for AbstractSelection models.
+
+    This command identifies models that inherit from AbstractSelection and generates
+    appropriate database trigger migrations to ensure data integrity between
+    Tenants and their associated Options.
+    """
 
     help = dedent(
         """\
-    Generate migrations with triggers for models subclassed from AbstractSelection.
+        Generate migrations with triggers for models subclassed from AbstractSelection.
 
-    These triggers ensure there can never be mismatch between a Tenant and an associated Option.
+        These triggers ensure there can never be mismatch between a Tenant and an associated Option.
 
-    Note: This command always drops any existing trigger before creating a new one, so forcing the creation of
-    migrations will not cause an OperationalError.
-    """
+        Note: This command always drops any existing trigger before creating a new one, so forcing the creation of
+        migrations will not cause an OperationalError.
+        """
     )
 
     def __init__(self, *args, **kwargs):
+        """Initialize command with default values for all configuration options."""
         super().__init__(*args, **kwargs)
-        self.app_label = None
-        self.model_name = None
-        self.db_table = None
-        self.force = False
-        self.dry_run = False
-        self.migration_dir = None
-        self.interactive = False
-        self.verbose = False
-        self.last_generated_migration = None
-        self.trigger_name = None
-        self.db_vendor = None
+        self.context: Optional[MigrationContext] = None
+        self.force: bool = False
+        self.dry_run: bool = False
+        self.migration_dir: Optional[str] = None
+        self.interactive: bool = False
+        self.verbose: bool = False
+        self.last_generated_migration: Optional[str] = None
+        self.db_vendor: DBVendor = self._get_db_vendor()
 
-    def create_parser(self, *args, **kwargs):
-        """Create a parser with RawTextHelpFormatter to preserve newlines in help text."""
-        parser = super().create_parser(*args, **kwargs)
+    def create_parser(self, prog_name: str, subcommand: str, **kwargs) -> CommandParser:
+        """Create a command parser that preserves newlines in help text.
+
+        Args:
+            prog_name: The name of the program
+            subcommand: The name of the subcommand
+            **kwargs: Additional parser arguments
+
+        Returns:
+            A CommandParser instance with RawTextHelpFormatter
+        """
+        parser = super().create_parser(prog_name, subcommand, **kwargs)
         parser.formatter_class = RawTextHelpFormatter
         return parser
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
+        """Add command-line arguments to the parser.
+
+        Args:
+            parser: The argument parser to add arguments to
+        """
         parser.add_argument(
             "--app",
             type=str,
@@ -104,285 +151,435 @@ class Command(BaseCommand):
             help="Provide detailed output of the migration creation process.",
         )
 
-    def handle(self, *args, **options):
-        self.app_label = options.get("app")
-        self.model_name = options.get("model")
-        self.force = options.get("force")
-        self.dry_run = options.get("dry_run")
-        self.migration_dir = options.get("migration_dir")
-        self.interactive = options.get("interactive")
-        self.verbose = options.get("verbose")
-        self.last_generated_migration = None
+    def handle(self, *args, **options) -> None:
+        """Execute the command logic based on provided options.
 
-        self.db_vendor = options.get("db_vendor_override") or DB_VENDOR_OVERRIDE or connection.vendor
+        Args:
+            *args: Positional arguments
+            **options: Command options as key-value pairs
+        """
+        self._initialize_options(options)
 
-        if self.model_name:
-            self.app_label, model_name = self.model_name.split(".")
-            model = apps.get_model(self.app_label, model_name)
-            self.last_generated_migration = self.create_migration_for_model(model)
-        elif self.app_label:
-            for model in apps.get_app_config(self.app_label).get_models():
-                if issubclass(model, AbstractSelection) and model != AbstractSelection:
-                    self.last_generated_migration = self.create_migration_for_model(model)
+        if options.get("model"):
+            self._handle_single_model(options["model"])
+        elif options.get("app"):
+            self._handle_app_models(options["app"])
         else:
-            for model in apps.get_models():
-                if issubclass(model, AbstractSelection) and model != AbstractSelection:
-                    self.last_generated_migration = self.create_migration_for_model(model)
+            self._handle_all_models()
 
-    def create_migration_for_model(self, model):
-        """Create a migration file for the given model."""
-        self.app_label = model._meta.app_label  # pylint: disable=W0212
-        self.db_table = model._meta.db_table  # pylint: disable=W0212
-        self.model_name = model.__name__.lower()
-        self.trigger_name = self.construct_trigger_name()
+    def _initialize_options(self, options: dict) -> None:
+        """Initialize command options from parsed arguments.
+
+        Args:
+            options: Dictionary of command options
+        """
+        self.force = options.get("force", False)
+        self.dry_run = options.get("dry_run", False)
+        self.migration_dir = options.get("migration_dir")
+        self.interactive = options.get("interactive", False)
+        self.verbose = options.get("verbose", False)
+        self.db_vendor = self._get_db_vendor(options.get("db_vendor_override"))
+
+    def _get_db_vendor(self, override: Optional[str] = None) -> DBVendor:
+        """Determine the database vendor to use.
+
+        Args:
+            override: Optional vendor override value
+
+        Returns:
+            Database vendor identifier
+
+        Raises:
+            ValueError: If the determined vendor is not supported
+        """
+        vendor = override or DB_VENDOR_OVERRIDE or connection.vendor
+        if vendor not in ("sqlite", "postgresql", "mysql", "oracle"):
+            raise ValueError(f"Unsupported database backend: {vendor}")
+        return vendor
+
+    def _handle_single_model(self, model_path: str) -> None:
+        """Process a single model specified by its path.
+
+        Args:
+            model_path: String in format "app_label.ModelName"
+        """
+        app_label, model_name = model_path.split(".")
+        model = apps.get_model(app_label, model_name)
+        self._process_model(model)
+
+    def _handle_app_models(self, app_label: str) -> None:
+        """Process all AbstractSelection models in the specified app.
+
+        Args:
+            app_label: Label of the Django app to process
+        """
+        app_config = apps.get_app_config(app_label)
+        self._process_app_models(app_config)
+
+    def _handle_all_models(self) -> None:
+        """Process AbstractSelection models across all installed apps."""
+        for model in apps.get_models():
+            if self._should_process_model(model):
+                self._process_model(model)
+
+    def _process_app_models(self, app_config: AppConfig) -> None:
+        """Process all eligible models in an app configuration.
+
+        Args:
+            app_config: Django app configuration object
+        """
+        for model in app_config.get_models():
+            if self._should_process_model(model):
+                self._process_model(model)
+
+    @staticmethod
+    def _should_process_model(model: Type[Model]) -> bool:
+        """Determine if a model should have triggers generated.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            Boolean indicating if the model should be processed
+        """
+        return issubclass(model, AbstractSelection) and model != AbstractSelection
+
+    def _process_model(self, model: Type[Model]) -> None:
+        """Process a single model for trigger migration generation.
+
+        Args:
+            model: Django model class to process
+        """
+        self.context = MigrationContext(
+            app_label=model._meta.app_label,
+            model_name=model.__name__.lower(),
+            db_table=model._meta.db_table,
+            trigger_name=self._construct_trigger_name(model._meta.db_table),
+        )
 
         if self.verbose:
-            self.stdout.write(
-                self.style.WARNING(  # pylint: disable=E1101
-                    "\nProcessing model: "
-                    f"'{self.model_name}' in app: '{self.app_label}' with db_table: '{self.db_table}'"
-                )
-            )
+            self._log_model_processing()
 
-        if not self.force and (migration_file := self.trigger_exists()):
-            if self.verbose:
-                self.stdout.write(
-                    self.style.WARNING(  # pylint: disable=E1101
-                        "Skipping trigger creation for model "
-                        f"'{self.model_name}', which already exists at:\n\t{migration_file}"
-                    )
-                )
-            else:
-                self.stdout.write(
-                    self.style.WARNING(  # pylint: disable=E1101
-                        f"Trigger '{self.trigger_name}' for model '{self.model_name}' already exists. Skipping..."
-                    )
-                )
-            return self.last_generated_migration
+        if not self.force and (migration_file := self._trigger_exists()):
+            self._log_existing_trigger(migration_file)
+            return
 
-        last_migration = self.get_last_migration_name()
-        migration_name = self.construct_migration_name(last_migration)
-        trigger_sql = self.get_trigger_sql()
-        migration_file_path = self.get_migration_file_path(migration_name)
+        self._create_migration()
+
+    def _construct_trigger_name(self, db_table: str) -> str:
+        """Construct a valid trigger name for the given database table.
+
+        Args:
+            db_table: Name of the database table
+
+        Returns:
+            Constructed trigger name
+        """
+        max_length = connection.ops.max_name_length() or 200
+        # base_name = f"{db_table.replace('"', '').replace('.', '_')}_tenant_check"
+        replaced_db_table = db_table.replace('"', "").replace(".", "_")
+        base_name = f"{replaced_db_table}_tenant_check"
+        name_hash = hashlib.sha1(base_name.encode()).hexdigest()[:10]
+
+        # Ensure name starts with a letter
+        if base_name[0] in ("_", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"):
+            base_name = f"t{base_name[:-1]}"
+
+        return f"{base_name[:max_length - len(name_hash) - 1]}_{name_hash}"
+
+    def _create_migration(self) -> None:
+        """Create a new migration file for the current model context."""
+        if not self.context:
+            raise RuntimeError("Migration context not initialized")
+
+        last_migration = self._get_last_migration()
+        self.context.migration_name = self._construct_migration_name(last_migration)
+        self.last_generated_migration = self.context.migration_name
+        migration_path = self._get_migration_path()
 
         if self.dry_run:
-            self.stdout.write(
-                self.style.SUCCESS(  # pylint: disable=E1101
-                    f"[DRY RUN] Migration would be created: {migration_file_path}"
-                )
-            )
-            if self.verbose:
-                self.stdout.write(
-                    "[DRY RUN] Migration content:\n" f"{self.get_migration_template(last_migration, trigger_sql)}"
-                )
+            self._handle_dry_run(migration_path)
         else:
-            if self.interactive:
-                confirm = input(f"Do you want to create a migration for {self.model_name}? (y/n): ")
-                if confirm.lower() != "y":
-                    self.stdout.write(
-                        self.style.WARNING(  # pylint: disable=E1101
-                            f"Migration creation for {self.model_name} skipped by user."
-                        )
-                    )
-                    return self.last_generated_migration
+            self._handle_migration_creation(migration_path, last_migration)
 
-            self.stdout.write(
-                self.style.WARNING(f"Creating migration for {self.model_name}...")  # pylint: disable=E1101
-            )
-            self.write_migration_file(migration_file_path, last_migration, trigger_sql)
-            self.stdout.write(self.style.SUCCESS(f"Migration created: {migration_file_path}"))  # pylint: disable=E1101
+    def _get_last_migration(self) -> Optional[str]:
+        """Get the name of the last migration for the current app.
 
-        return migration_name
-
-    def trigger_exists(self):
-        """Check if a trigger for the model already exists in any applied migration."""
-        migrations = MigrationRecorder.Migration.objects.filter(app=self.app_label).order_by(  # pylint: disable=E1101
-            "-applied"
-        )
-        for migration in migrations:
-            migration_file = os.path.join(
-                apps.get_app_config(self.app_label).path,
-                "migrations",
-                f"{migration.name}.py",
-            )
-            if self.verbose:
-                self.stdout.write(
-                    self.style.WARNING(  # pylint: disable=E1101
-                        f"Checking migration file for trigger {self.trigger_name}: {migration_file}"
-                    )
-                )
-            if os.path.exists(migration_file):
-                with open(migration_file, "r", encoding="utf-8") as file:
-                    content = file.read()
-                    if f"{self.trigger_name}" in content:
-                        return migration_file
-        return False
-
-    def get_last_migration_name(self):
-        """Retrieve the last migration name or use the previously generated one."""
+        Returns:
+            Name of the last migration or None if no migrations exist
+        """
         if self.last_generated_migration:
             return self.last_generated_migration
-        last_migration = MigrationRecorder.Migration.objects.filter(app=self.app_label).last()  # pylint: disable=E1101
+
+        last_migration = MigrationRecorder.Migration.objects.filter(app=self.context.app_label).last()
+
         return last_migration.name if last_migration else None
 
-    def construct_trigger_name(self):
-        """Construct the trigger name based on the model's db_table.
+    def _construct_migration_name(self, last_migration: Optional[str]) -> str:
+        """Construct a name for the new migration file.
 
-        Result generally looks like: <db_table>_tenant_check_<hash>
+        Args:
+            last_migration: Name of the last migration
+
+        Returns:
+            Constructed migration name
         """
-        max_identifier_length = connection.ops.max_name_length() or 200
-        table_name = self.db_table.replace('"', "").replace(".", "_") + "_tenant_check"  # pylint: disable=W0212
-        hashed_table_name = hashlib.sha1(table_name.encode("utf-8")).hexdigest()[:10]
-        trigger_hash = f"_{hashed_table_name}"
-        hash_length = len(trigger_hash)
+        if last_migration and (match := re.match(r"^(\d+)_", last_migration)):
+            number = str(int(match.group(1)) + 1).zfill(4)
+            return f"{number}_auto_trigger_{self.context.model_name}"
+        return f"auto_trigger_{self.context.model_name}"
 
+    def _get_migration_path(self) -> Path:
+        """Get the full path for the new migration file.
+
+        Returns:
+            Path object for the migration file
+        """
+        app_config = apps.get_app_config(self.context.app_label)
+        base_dir = Path(self.migration_dir or app_config.path) / "migrations"
+        base_dir.mkdir(exist_ok=True)
+        return base_dir / f"{self.context.migration_name}.py"
+
+    def _handle_dry_run(self, migration_path: Path) -> None:
+        """Handle dry run mode for migration creation.
+
+        Args:
+            migration_path: Path where the migration would be created
+        """
+        self.stdout.write(self.style.SUCCESS(f"[DRY RUN] Migration would be created: {migration_path}"))
         if self.verbose:
             self.stdout.write(
-                self.style.WARNING(  # pylint: disable=E1101
-                    "Creating hash for trigger name: "
-                    f"{max_identifier_length=}, {table_name=}, {trigger_hash=}, {hash_length=}"
-                )
+                "[DRY RUN] Migration content:\n" f"{self._get_migration_content(self._get_last_migration())}"
             )
 
-        # Name shouldn't start with an underscore or digit. If it does, prepend with 't'.
-        if table_name[0] == "_" or table_name[0].isdigit():
-            table_name = f"t{table_name[:-1]}"
+    def _handle_migration_creation(self, migration_path: Path, last_migration: Optional[str]) -> None:
+        """Handle actual migration file creation.
 
-        trigger_name = f"{table_name[:max_identifier_length - hash_length]}{trigger_hash}"
+        Args:
+            migration_path: Path where to create the migration
+            last_migration: Name of the last migration
+        """
+        if self.interactive and not self._confirm_creation():
+            self.stdout.write(self.style.WARNING(f"Migration creation for {self.context.model_name} skipped by user."))
+            return
+
+        self.stdout.write(self.style.WARNING(f"Creating migration for {self.context.model_name}..."))
+
+        migration_path.write_text(self._get_migration_content(last_migration), encoding="utf-8")
+
+        self.stdout.write(self.style.SUCCESS(f"Migration created: {migration_path}"))
+
+    def _confirm_creation(self) -> bool:
+        """Prompt for user confirmation in interactive mode.
+
+        Returns:
+            Boolean indicating if the user confirmed
+        """
+        return input(f"Do you want to create a migration for {self.context.model_name}? (y/n): ").lower() == "y"
+
+    def _get_migration_content(self, last_migration: Optional[str]) -> str:
+        """Generate the content for the migration file.
+
+        Args:
+            last_migration: Name of the last migration
+
+        Returns:
+            String containing the migration file content
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        trigger_sql = self._get_trigger_sql()
+
+        return dedent(
+            f"""\
+            # Generated by django-tenant-options on {timestamp}
+
+            from django.db import migrations
+
+
+            class Migration(migrations.Migration):
+                \"\"\"Adds an auto-generated trigger for a django-tenant-options Selection model.\"\"\"
+
+                dependencies = [
+                    ('{self.context.app_label}', '{last_migration}'),
+                ]
+
+                operations = [
+                    migrations.RunSQL(
+                        sql=\"\"\"{trigger_sql}\"\"\",
+                        reverse_sql=\"\"\"DROP TRIGGER IF EXISTS {self.context.trigger_name};\"\"\",
+                    ),
+                ]
+            """
+        )
+
+    def _get_trigger_sql(self) -> str:
+        """Generate the SQL for creating the database trigger.
+
+        Returns:
+            SQL string for creating the trigger
+
+        Raises:
+            ValueError: If the database vendor is not supported
+        """
         if self.verbose:
-            self.stdout.write(
-                self.style.WARNING(  # pylint: disable=E1101
-                    f"Constructed trigger name for model '{self.model_name}': {trigger_name}"
-                )
-            )
+            self._log_trigger_sql_generation()
 
-        return trigger_name
+        trigger_templates = {
+            "sqlite": self._get_sqlite_trigger,
+            "postgresql": self._get_postgresql_trigger,
+            "mysql": self._get_mysql_trigger,
+            "oracle": self._get_oracle_trigger,
+        }
 
-    def construct_migration_name(self, last_migration):
-        """Construct the migration name based on the last migration."""
-        match = re.match(r"^(\d+)_", last_migration)
-        if match:
-            new_migration_number = str(int(match.group(1)) + 1).zfill(4)
-            return f"{new_migration_number}_auto_trigger_{self.model_name}"
-        migration_name = f"auto_trigger_{self.model_name}"
-        if self.verbose:
-            self.stdout.write(
-                self.style.WARNING(  # pylint: disable=E1101
-                    f"Constructed migration name for model '{self.model_name}': {migration_name}"
-                )
-            )
+        return trigger_templates[self.db_vendor]()
 
-        return migration_name
+    def _get_sqlite_trigger(self) -> str:
+        """Generate SQLite-specific trigger SQL.
 
-    def get_migration_file_path(self, migration_name):
-        """Determine the correct path for the migration file."""
-        app_config = apps.get_app_config(self.app_label)
-        migrations_dir = self.migration_dir if self.migration_dir else os.path.join(app_config.path, "migrations")
-
-        if not os.path.exists(migrations_dir):
-            os.makedirs(migrations_dir)
-
-        return os.path.join(migrations_dir, f"{migration_name}.py")
-
-    def write_migration_file(self, file_path, last_migration, trigger_sql):
-        """Write the migration file to the specified path."""
-        migration_content = self.get_migration_template(last_migration, trigger_sql)
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(migration_content)
-
-    def get_trigger_sql(self):
-        """Return the SQL for creating the trigger."""
-        if self.verbose:
-            self.stdout.write(
-                self.style.WARNING(  # pylint: disable=E1101
-                    f"Generating trigger SQL for model '{self.model_name}' with db_table "
-                    f"'{self.db_table}' and vendor '{self.db_vendor}'"
-                )
-            )
-        if self.db_vendor == "sqlite":
-            return f"""
-            DROP TRIGGER IF EXISTS {self.trigger_name};
-            CREATE TRIGGER {self.trigger_name}
-            BEFORE INSERT ON {self.db_table}
+        Returns:
+            SQL string for creating the SQLite trigger
+        """
+        return f"""
+            DROP TRIGGER IF EXISTS {self.context.trigger_name};
+            CREATE TRIGGER {self.context.trigger_name}
+            BEFORE INSERT ON {self.context.db_table}
             FOR EACH ROW
-            WHEN NEW.tenant_id != (SELECT tenant_id FROM {self.db_table} WHERE id = NEW.option_id)
+            WHEN NEW.tenant_id != (SELECT tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id)
             BEGIN
-                SELECT RAISE(FAIL, 'Tenant mismatch between {self.db_table} and the associated Option');
+                SELECT RAISE(FAIL, 'Tenant mismatch between {self.context.db_table} and the associated Option');
             END;
             """
-        elif self.db_vendor == "postgresql":
-            return f"""
-            CREATE OR REPLACE FUNCTION {self.trigger_name}()
+
+    def _get_postgresql_trigger(self) -> str:
+        """Generate PostgreSQL-specific trigger SQL.
+
+        Returns:
+            SQL string for creating the PostgreSQL trigger and function
+        """
+        return f"""
+            CREATE OR REPLACE FUNCTION {self.context.trigger_name}()
             RETURNS TRIGGER AS $$
             BEGIN
-                IF NEW.tenant_id != (SELECT tenant_id FROM {self.db_table} WHERE id = NEW.option_id) THEN
-                    RAISE EXCEPTION 'Tenant mismatch between {self.db_table} and the associated Option';
+                IF NEW.tenant_id != (SELECT tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id) THEN
+                    RAISE EXCEPTION 'Tenant mismatch between {self.context.db_table} and the associated Option';
                 END IF;
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
 
-            DROP TRIGGER IF EXISTS {self.trigger_name} ON {self.db_table};
-            CREATE TRIGGER {self.trigger_name}
-            BEFORE INSERT ON {self.db_table}
+            DROP TRIGGER IF EXISTS {self.context.trigger_name} ON {self.context.db_table};
+            CREATE TRIGGER {self.context.trigger_name}
+            BEFORE INSERT ON {self.context.db_table}
             FOR EACH ROW
-            EXECUTE FUNCTION {self.trigger_name}();
+            EXECUTE FUNCTION {self.context.trigger_name}();
             """
-        elif self.db_vendor == "mysql":
-            return f"""
-            DROP TRIGGER IF EXISTS {self.trigger_name};
-            CREATE TRIGGER {self.trigger_name}
-            BEFORE INSERT ON {self.db_table}
+
+    def _get_mysql_trigger(self) -> str:
+        """Generate MySQL-specific trigger SQL.
+
+        Returns:
+            SQL string for creating the MySQL trigger
+        """
+        return f"""
+            DROP TRIGGER IF EXISTS {self.context.trigger_name};
+            CREATE TRIGGER {self.context.trigger_name}
+            BEFORE INSERT ON {self.context.db_table}
             FOR EACH ROW
             BEGIN
                 DECLARE option_tenant_id INT;
-                SELECT tenant_id INTO option_tenant_id FROM {self.db_table} WHERE id = NEW.option_id;
+                SELECT tenant_id INTO option_tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id;
 
                 IF NEW.tenant_id != option_tenant_id THEN
-                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tenant mismatch between {self.db_table} and the associated Option';
+                    SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'Tenant mismatch between {self.context.db_table} and the associated Option';
                 END IF;
             END;
             """
-        elif self.db_vendor == "oracle":
-            return f"""
-            CREATE OR REPLACE TRIGGER {self.trigger_name}
-            BEFORE INSERT ON {self.db_table}
+
+    def _get_oracle_trigger(self) -> str:
+        """Generate Oracle-specific trigger SQL.
+
+        Returns:
+            SQL string for creating the Oracle trigger
+        """
+        return f"""
+            CREATE OR REPLACE TRIGGER {self.context.trigger_name}
+            BEFORE INSERT ON {self.context.db_table}
             FOR EACH ROW
             DECLARE
                 option_tenant_id NUMBER;
             BEGIN
-                SELECT tenant_id INTO option_tenant_id FROM {self.db_table} WHERE id = :NEW.option_id;
+                SELECT tenant_id INTO option_tenant_id FROM {self.context.db_table} WHERE id = :NEW.option_id;
 
                 IF :NEW.tenant_id != option_tenant_id THEN
-                    RAISE_APPLICATION_ERROR(-20001, 'Tenant mismatch between {self.db_table} and the associated Option');
+                    RAISE_APPLICATION_ERROR(-20001, 'Tenant mismatch between {self.context.db_table} and the associated Option');
                 END IF;
             END;
             """
-        else:
-            raise ValueError(f"Unsupported database backend: {self.db_vendor}")
 
-    def get_migration_template(self, last_migration, trigger_sql):
-        """Return the migration template."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        return dedent(
-            f"""\
-        # Generated by django-tenant-options on {timestamp}
-
-        from django.db import migrations
-
-
-        class Migration(migrations.Migration):
-            \"\"\"Adds an auto-generated trigger for a django-tenant-options Selection model.\"\"\"
-
-            dependencies = [
-                ('{self.app_label}', '{last_migration}'),
-            ]
-
-            operations = [
-                migrations.RunSQL(
-                    sql=\"\"\"{trigger_sql}\"\"\",
-                    reverse_sql=\"\"\"DROP TRIGGER IF EXISTS {self.trigger_name};\"\"\",
-                ),
-            ]
-        """
+    def _log_model_processing(self) -> None:
+        """Log information about the model being processed."""
+        self.stdout.write(
+            self.style.WARNING(
+                "\nProcessing model: "
+                f"'{self.context.model_name}' in app: '{self.context.app_label}' "
+                f"with db_table: '{self.context.db_table}'"
+            )
         )
+
+    def _log_existing_trigger(self, migration_file: str) -> None:
+        """Log information about an existing trigger.
+
+        Args:
+            migration_file: Path to the migration file containing the trigger
+        """
+        if self.verbose:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Skipping trigger creation for model "
+                    f"'{self.context.model_name}', which already exists at:\n\t{migration_file}"
+                )
+            )
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Trigger '{self.context.trigger_name}' for model '{self.context.model_name}' "
+                    "already exists. Skipping..."
+                )
+            )
+
+    def _log_trigger_sql_generation(self) -> None:
+        """Log information about trigger SQL generation."""
+        self.stdout.write(
+            self.style.WARNING(
+                f"Generating trigger SQL for model '{self.context.model_name}' with db_table "
+                f"'{self.context.db_table}' and vendor '{self.db_vendor}'"
+            )
+        )
+
+    def _trigger_exists(self) -> Optional[str]:
+        """Check if a trigger for the model already exists in any applied migration.
+
+        Returns:
+            Path to the migration file containing the trigger, or None if not found
+        """
+        migrations = MigrationRecorder.Migration.objects.filter(app=self.context.app_label).order_by("-applied")
+
+        for migration in migrations:
+            migration_file = (
+                Path(apps.get_app_config(self.context.app_label).path) / "migrations" / f"{migration.name}.py"
+            )
+
+            if self.verbose:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Checking migration file for trigger {self.context.trigger_name}: {migration_file}"
+                    )
+                )
+
+            if migration_file.exists():
+                content = migration_file.read_text(encoding="utf-8")
+                if self.context.trigger_name in content:
+                    return str(migration_file)
+
+        return None
