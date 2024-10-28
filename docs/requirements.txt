@@ -8,3 +8,5 @@ linkify-it-py==2.0.3
 
 # Django and related packages (for autodoc)
 Django==5.0.8
+django-crispy-forms==2.3
+crispy-bootstrap5==2024.10
