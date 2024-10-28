@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.39.0-jammy
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy
 
 ARG BUILD_ENVIRONMENT=local
 ARG APP_HOME=/app
