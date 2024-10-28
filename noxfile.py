@@ -2,29 +2,17 @@
 import os
 import shlex
 import shutil
-import sys
 from pathlib import Path
 from textwrap import dedent
 
 import nox
-
-
-try:
-    from nox_poetry import Session
-    from nox_poetry import session
-except ImportError:
-    message = f"""\
-    Nox failed to import the 'nox-poetry' package.
-
-    Please install it using the following command:
-
-    {sys.executable} -m pip install nox-poetry"""
-    raise SystemExit(dedent(message)) from None
+from nox import session
+from nox.sessions import Session
 
 
 # DJANGO_STABLE_VERSION should be set to the latest Django LTS version
 
-DJANGO_STABLE_VERSION = "5.0"
+DJANGO_STABLE_VERSION = "5.1"
 DJANGO_VERSIONS = [
     "4.2",
     "5.0",
@@ -34,12 +22,12 @@ DJANGO_VERSIONS = [
 # PYTHON_STABLE_VERSION should be set to the latest stable Python version
 
 PYTHON_STABLE_VERSION = "3.12"
-PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12"]
+PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13"]
 
 
-package = "django_tenant_options"
+PACKAGE = "django_tenant_options"
 
-nox.needs_version = ">= 2022.1.7"
+nox.needs_version = ">= 2024.4.15"
 nox.options.sessions = (
     "pre-commit",
     "safety",
@@ -153,7 +141,7 @@ def precommit(session: Session, django: str) -> None:
 @nox.parametrize("django", DJANGO_STABLE_VERSION)
 def safety(session: Session, django: str) -> None:
     """Scan dependencies for insecure packages."""
-    requirements = session.poetry.export_requirements()
+    requirements = session.posargs or ["requirements.txt"]
     session.install("safety")
     session.run("safety", "check", "--full-report", f"--file={requirements}")
 
@@ -162,18 +150,10 @@ def safety(session: Session, django: str) -> None:
 @nox.parametrize("django", DJANGO_VERSIONS)
 def tests(session: Session, django: str) -> None:
     """Run the test suite."""
-    session.install(".")
-    session.install(
-        "coverage[toml]",
-        "pytest",
-        "pytest-django",
-        "pygments",
-        "playwright",
-        "pytest-playwright",
-
-    )
+    session.run("uv", "sync", "--prerelease=allow", "--extra=dev")
     try:
-        session.run("coverage", "run", "-m", "pytest", *session.posargs)
+
+        session.run("coverage", "run", "-m", "pytest", "-vv", *session.posargs)
     finally:
         if session.interactive:
             session.notify("coverage", posargs=[])
@@ -198,9 +178,9 @@ def coverage(session: Session, django: str) -> None:
 def xdoctest(session: Session, django: str) -> None:
     """Run examples with xdoctest."""
     if session.posargs:
-        args = [package, *session.posargs]
+        args = [PACKAGE, *session.posargs]
     else:
-        args = [f"--modname={package}", "--command=all"]
+        args = [f"--modname={PACKAGE}", "--command=all"]
         if "FORCE_COLOR" in os.environ:
             args.append("--colored=1")
 
@@ -218,7 +198,7 @@ def docs_build(session: Session, django: str) -> None:
         args.insert(0, "--color")
 
     session.install(".")
-    session.install("sphinx", "sphinx-click", "furo", "myst-parser")
+    session.install("-r", "docs/requirements.txt")
 
     build_dir = Path("docs", "_build")
     if build_dir.exists():
@@ -233,7 +213,8 @@ def docs(session: Session, django: str) -> None:
     """Build and serve the documentation with live reloading on file changes."""
     args = session.posargs or ["--open-browser", "docs", "docs/_build"]
     session.install(".")
-    session.install("sphinx", "sphinx-autobuild", "sphinx-click", "furo", "myst-parser")
+    session.install("-r", "docs/requirements.txt")
+    session.install("sphinx-autobuild")
 
     build_dir = Path("docs", "_build")
     if build_dir.exists():
