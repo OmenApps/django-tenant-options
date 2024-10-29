@@ -23,6 +23,7 @@ class TenantFormBaseMixin:
     """Base mixin that checks for a valid tenant value passed from the view and hides the tenant field."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the form with the tenant and hide the tenant field."""
         self.tenant = self._pop_tenant(kwargs)
         super().__init__(*args, **kwargs)
         self._initialize_tenant_field()
@@ -78,6 +79,7 @@ class OptionCreateFormMixin(TenantFormBaseMixin):  # pylint disable=R0903
     """
 
     def __init__(self, *args, **kwargs):
+        """Initialize the form with the tenant and set the option_type field."""
         super().__init__(*args, **kwargs)
         self._initialize_option_type_field()
         self._initialize_deleted_field()
@@ -142,6 +144,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
     """Creates a form with a `selections` field for managing tenant selections."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the form with the tenant and set the selections field."""
         self._meta = self.Meta
         self.selection_model = self._meta.model
         self.option_model = apps.get_model(self.selection_model.option_model)
@@ -223,6 +226,7 @@ class UserFacingFormMixin:
     """Mixin to handle user-facing forms with Options fields."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the form with the tenant and filter ForeignKey fields related to AbstractOption subclasses."""
         self.tenant = kwargs.pop("tenant", None)
         if not self.tenant:
             raise NoTenantProvidedFromViewError("No tenant model class was provided to the form from the view")

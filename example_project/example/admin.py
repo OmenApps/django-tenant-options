@@ -4,11 +4,8 @@ from django.apps import apps
 from django.contrib import admin
 
 from example_project.example.models import Task
-from example_project.example.models import TaskPriorityOption
 from example_project.example.models import TaskPrioritySelection
-from example_project.example.models import TaskStatusOption
 from example_project.example.models import TaskStatusSelection
-from example_project.example.models import Tenant
 
 
 class TaskAdmin(admin.ModelAdmin):
@@ -16,8 +13,9 @@ class TaskAdmin(admin.ModelAdmin):
 
     list_display = ("title", "description", "status", "priority")
 
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        """Override get_form to filter the priority and status fields by tenant."""
+        form = super().get_form(request, obj, change, **kwargs)
         form.base_fields["priority"].queryset = TaskPrioritySelection.objects.selected_options_for_tenant(
             tenant=request.user.tenant
         )
@@ -34,6 +32,7 @@ class ListAdminMixin:
     """Mixin to automatically set list_display to all fields on a model."""
 
     def __init__(self, model, admin_site):
+        """Set list_display to all fields on the model."""
         self.list_display = [field.name for field in model._meta.fields]
         super().__init__(model, admin_site)
 

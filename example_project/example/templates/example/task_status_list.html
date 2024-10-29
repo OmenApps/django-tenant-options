@@ -1,51 +1,83 @@
-{% extends "example/base.html" %}
+{% extends "example/base.html" %} {% block content %}
+<button
+  class="btn btn-sm btn-secondary"
+  onclick="window.location.href = '{% url 'example:home' %}';"
+>
+  Home
+</button>
+<button
+  class="btn btn-sm btn-primary"
+  onclick="window.location.href = '{% url 'example:task_status_option_create' %}';"
+>
+  Create Task Status Option
+</button>
+<button
+  class="btn btn-sm btn-primary"
+  onclick="window.location.href = '{% url 'example:task_status_selections_update' %}';"
+>
+  Update Task Status Selections
+</button>
+<br /><br />
+<div>
+  <ul>
+    <li>Current User: {{ request.user }}</li>
+    <li>Current Tenant: {{ request.user.tenant }}</li>
+  </ul>
+</div>
+<div>
+  <legend>Task Status Option List</legend>
 
-{% block content %}
-    <button class="btn btn-sm btn-secondary" onclick="window.location.href = '{% url 'example:home' %}';">Home</button>
-    <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_status_option_create' %}';">Create Task Status Option</button>
-    <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_status_selections_update' %}';">Update Task Status Selections</button>
-    <br><br>
-    <div>
-        <ul>
-            <li>Current User: {{ request.user }}</li>
-            <li>Current Tenant: {{ request.user.tenant }}</li>
-        </ul>
-    </div>
-    <div>
-        <legend>Task Status Option List</legend>
+  Below is the list of all Options for a task's status that are available for
+  the current Tenant to select from.
+  <div class="pt-4">
+    <dl class="row">
+      <dt class="col-sm-3">Option Name</dt>
+      <dd class="col-sm-9">Details</dd>
 
-        Below is the list of all Options for a task's status that are available for the current Tenant to select from.
-        <div class="pt-4">
-            <dl class="row">
-                <dt class="col-sm-3">Option Name</dt>
-                <dd class="col-sm-9">Details</dd>
+      {% for task_status_option in task_status_options %}
+      <dt class="col-sm-3">
+        {{ forloop.counter }} {{ task_status_option.name }}
+      </dt>
+      <dd class="col-sm-9">
+        Option Type:
+        <span class="{{ task_status_option.get_option_type_display }}"
+          >{{ task_status_option.get_option_type_display }}</span
+        >; Tenant: {{ task_status_option.tenant }} {% if
+        task_status_option.option_type == 'cu' %}
+        <button
+          class="btn btn-sm btn-primary"
+          onclick="window.location.href = '{% url 'example:task_status_option_update' task_status_option_id=task_status_option.id  %}';"
+        >
+          Update
+        </button>
+        {% endif %}
+      </dd>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
+<div>
+  <legend>Task Status Selection List</legend>
 
-                {% for task_status_option in task_status_options %}
-                    <dt class="col-sm-3">{{ forloop.counter }} {{ task_status_option.name }}</dt>
-                    <dd class="col-sm-9">
-                        Option Type: <span class="{{ task_status_option.get_option_type_display }}">{{ task_status_option.get_option_type_display }}</span>; Tenant: {{ task_status_option.tenant }}
-                        {% if task_status_option.option_type == 'cu' %}
-                            <button class="btn btn-sm btn-primary" onclick="window.location.href = '{% url 'example:task_status_option_update' task_status_option_id=task_status_option.id  %}';">Update</button>
-                        {% endif %}
-                    </dd>
-                {% endfor %}
-            </dl>
-        </div>
-    </div>
-    <div>
-        <legend>Task Status Selection List</legend>
+  Below is the list of all current Selections for a task's priority level for
+  the curent Tenant.
+  <div class="pt-4">
+    <dl class="row">
+      <dt class="col-sm-3">Selected Option Name</dt>
+      <dd class="col-sm-9">Details</dd>
 
-        Below is the list of all current Selections for a task's priority level for the curent Tenant.
-        <div class="pt-4">
-            <dl class="row">
-                <dt class="col-sm-3">Selected Option Name</dt>
-                <dd class="col-sm-9">Details</dd>
-
-                {% for task_status_selection in task_status_selections %}
-                    <dt class="col-sm-3">{{ forloop.counter }} {{ task_status_selection.name }}</dt>
-                    <dd class="col-sm-9">Option Type: <span class="{{ task_status_selection.get_option_type_display }}">{{ task_status_selection.get_option_type_display }}</span>; Tenant: {{ task_status_selection.tenant }}</dd>
-                {% endfor %}
-            </dl>
-        </div>
-    </div>
+      {% for task_status_selection in task_status_selections %}
+      <dt class="col-sm-3">
+        {{ forloop.counter }} {{ task_status_selection.name }}
+      </dt>
+      <dd class="col-sm-9">
+        Option Type:
+        <span class="{{ task_status_selection.get_option_type_display }}"
+          >{{ task_status_selection.get_option_type_display }}</span
+        >; Tenant: {{ task_status_selection.tenant }}
+      </dd>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
 {% endblock content %}

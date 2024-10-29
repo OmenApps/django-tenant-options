@@ -17,7 +17,8 @@ class Tenant(models.Model):
     name = models.CharField(max_length=100)
     subdomain = models.CharField(max_length=100, unique=True)
 
-    def __str__(self):  # pylint: disable=E0307
+    def __str__(self):
+        """Return the name of the Tenant."""
         return self.name
 
 
@@ -47,7 +48,8 @@ class Task(models.Model):
         related_name="tasks",
     )
 
-    def __str__(self):  # pylint: disable=E0307
+    def __str__(self):
+        """Return the title of the Task."""
         return self.title
 
 
@@ -63,7 +65,9 @@ class TaskPriorityOption(AbstractOption):
         "Low": {"option_type": OptionType.MANDATORY},
     }
 
-    class Meta(AbstractOption.Meta):  # pylint: disable=R0903 disable=C0115
+    class Meta(AbstractOption.Meta):
+        """Meta class for TaskPriorityOption."""
+
         verbose_name = "Task Priority Option"
         verbose_name_plural = "Task Priority Options"
 
@@ -74,7 +78,9 @@ class TaskPrioritySelection(AbstractSelection):
     tenant_model = "example.Tenant"  # Specifying the tenant_model here for demonstration purposes
     option_model = "example.TaskPriorityOption"
 
-    class Meta(AbstractSelection.Meta):  # pylint: disable=R0903 disable=C0115
+    class Meta(AbstractSelection.Meta):
+        """Meta class for TaskPrioritySelection."""
+
         verbose_name = "Task Priority Selection"
         verbose_name_plural = "Task Priority Selections"
 
@@ -91,7 +97,9 @@ class TaskStatusOption(AbstractOption):
         "Archived": {"option_type": OptionType.MANDATORY},
     }
 
-    class Meta(AbstractOption.Meta):  # pylint: disable=R0903 disable=C0115
+    class Meta(AbstractOption.Meta):
+        """Meta class for TaskStatusOption."""
+
         verbose_name = "Task Status Option"
         verbose_name_plural = "Task Status Options"
 
@@ -102,6 +110,8 @@ class TaskStatusSelection(AbstractSelection):
     # Relying on the default tenant_model in project settings
     option_model = "example.TaskStatusOption"
 
-    class Meta(AbstractSelection.Meta):  # pylint: disable=R0903 disable=C0115
+    class Meta(AbstractSelection.Meta):
+        """Meta class for TaskStatusSelection."""
+
         verbose_name = "Task Status Selection"
         verbose_name_plural = "Task Status Selections"

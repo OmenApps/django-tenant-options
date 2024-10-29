@@ -6,6 +6,8 @@ from django.db import IntegrityError
 from django.db import transaction
 
 from django_tenant_options.choices import OptionType
+from django_tenant_options.exceptions import IncorrectSubclassError
+from django_tenant_options.exceptions import InvalidDefaultOptionError
 from django_tenant_options.models import validate_model_has_attribute
 from django_tenant_options.models import validate_model_is_concrete
 from example_project.example.models import TaskPriorityOption
@@ -25,7 +27,7 @@ class TestTenantOptionsModels:
 
     def test_create_task_priority_option(self):
         """Test creating a task priority option."""
-        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
         option = TaskPriorityOption.objects.create(name="Critical", option_type="dm")
         assert option.name == "Critical"
         assert option.option_type == "dm"
@@ -333,7 +335,7 @@ class TestValidationFunctions:
                 abstract = True
 
         # Test that validation fails for abstract model
-        with pytest.raises(Exception):
+        with pytest.raises(IncorrectSubclassError):
             validate_model_is_concrete(AbstractTestModel)
 
         # Test that validation passes for concrete model
@@ -389,7 +391,7 @@ class TestOptionManagerMethods:
     def test_update_default_option_validation(self):
         """Test validation in _update_or_create_default_option method."""
         # Try to create default option with invalid option_type
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidDefaultOptionError):
             TaskPriorityOption.objects._update_or_create_default_option("Test Option", {"option_type": "invalid"})
 
     def test_options_for_tenant_with_deleted(self):

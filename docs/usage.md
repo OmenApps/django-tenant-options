@@ -1,4 +1,4 @@
-# Usage Guide for django-tenant-options
+# Usage Guide
 
 ## Installation
 
@@ -47,11 +47,13 @@ DJANGO_TENANT_OPTIONS = {
 django-tenant-options provides three types of options:
 
 1. **Mandatory Options** (`OptionType.MANDATORY`):
+
    - Always available to all tenants
    - Cannot be disabled or removed by tenants
    - Example: Basic status options like "Active" or "Inactive"
 
 2. **Optional Options** (`OptionType.OPTIONAL`):
+
    - Available to all tenants but can be enabled/disabled
    - Tenants choose whether to use them
    - Example: Additional status options like "On Hold" or "Under Review"
@@ -210,26 +212,20 @@ class TaskPriorityOptionCreateView(LoginRequiredMixin, CreateView):
 ```html
 <!-- tasks/task_form.html -->
 <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save Task</button>
+  {% csrf_token %} {{ form.as_p }}
+  <button type="submit">Save Task</button>
 </form>
 
 <!-- tasks/priority_list.html -->
 <h2>Task Priorities</h2>
 <ul>
-{% for priority in priorities %}
-    <li>
-        {{ priority.name }}
-        {% if priority.option_type == 'dm' %}
-            (Mandatory)
-        {% elif priority.option_type == 'do' %}
-            (Optional)
-        {% else %}
-            (Custom)
-        {% endif %}
-    </li>
-{% endfor %}
+  {% for priority in priorities %}
+  <li>
+    {{ priority.name }} {% if priority.option_type == 'dm' %} (Mandatory) {%
+    elif priority.option_type == 'do' %} (Optional) {% else %} (Custom) {% endif
+    %}
+  </li>
+  {% endfor %}
 </ul>
 ```
 
@@ -324,12 +320,14 @@ class TaskPriorityOption(AbstractOption):
 ### Performance Optimization
 
 1. **Querying Efficiency**
+
    ```python
    # Use select_related for foreign keys
    TaskPriorityOption.objects.select_related('tenant').all()
    ```
 
 2. **Caching**
+
    ```python
    # Cache frequently used options
    from django.core.cache import cache

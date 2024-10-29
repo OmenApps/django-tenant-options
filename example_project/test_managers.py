@@ -1,7 +1,8 @@
+"""Test cases for the managers."""
+
 import pytest
 
 from example_project.example.models import TaskPriorityOption
-from example_project.example.models import TaskPrioritySelection
 from example_project.example.models import Tenant
 
 

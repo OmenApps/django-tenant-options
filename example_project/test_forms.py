@@ -428,6 +428,8 @@ class TestUserFacingFormMixin:
         __test__ = False
 
         class Meta:
+            """Meta class for form."""
+
             model = Task
             fields = ["title", "description", "priority", "status"]
 
@@ -446,7 +448,7 @@ class TestUserFacingFormMixin:
         """Test handling of deleted selections."""
         tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
         option = TaskPriorityOption.objects.create(name="To Delete", option_type=OptionType.CUSTOM, tenant=tenant)
-        selection = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        TaskPrioritySelection.objects.create(tenant=tenant, option=option)
 
         task = Task.objects.create(title="Test Task", description="Test Description", priority=option, user=self.user)
 

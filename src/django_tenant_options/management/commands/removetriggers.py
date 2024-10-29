@@ -13,9 +13,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import List
-from typing import Optional
-from typing import Set
 
 from django.apps import apps
 from django.core.management.base import BaseCommand
@@ -82,14 +79,14 @@ class Command(BaseCommand):
     def __init__(self, *args, **kwargs):
         """Initialize command with default values for all configuration options."""
         super().__init__(*args, **kwargs)
-        self.app_label: Optional[str] = None
-        self.model_name: Optional[str] = None
+        self.app_label: str | None = None
+        self.model_name: str | None = None
         self.dry_run: bool = False
-        self.migration_dir: Optional[str] = None
+        self.migration_dir: str | None = None
         self.interactive: bool = False
         self.verbose: bool = False
         self.verify: bool = False
-        self.last_generated_migration: Optional[str] = None
+        self.last_generated_migration: str | None = None
 
     def create_parser(self, prog_name: str, subcommand: str, **kwargs) -> CommandParser:
         """Create a command parser that preserves newlines in help text.
@@ -223,7 +220,7 @@ class Command(BaseCommand):
 
         self._process_triggers(triggers)
 
-    def _find_triggers_for_model(self, app_label: str, model_name: str) -> List[TriggerInfo]:
+    def _find_triggers_for_model(self, app_label: str, model_name: str) -> list[TriggerInfo]:
         """Find all triggers associated with a specific model.
 
         Args:
@@ -259,7 +256,7 @@ class Command(BaseCommand):
 
         return triggers
 
-    def _process_triggers(self, triggers: List[TriggerInfo]) -> None:
+    def _process_triggers(self, triggers: list[TriggerInfo]) -> None:
         """Process the identified triggers and create removal migrations.
 
         Args:
@@ -270,14 +267,14 @@ class Command(BaseCommand):
             return
 
         # Group triggers by app_label to create one migration per app
-        triggers_by_app: dict[str, Set[TriggerInfo]] = {}
+        triggers_by_app: dict[str, set[TriggerInfo]] = {}
         for trigger in triggers:
             triggers_by_app.setdefault(trigger.app_label, set()).add(trigger)
 
         for app_label, app_triggers in triggers_by_app.items():
             self._create_removal_migration(app_label, app_triggers)
 
-    def _create_removal_migration(self, app_label: str, triggers: Set[TriggerInfo]) -> None:
+    def _create_removal_migration(self, app_label: str, triggers: set[TriggerInfo]) -> None:
         """Create a migration to remove the specified triggers.
 
         Args:
@@ -344,7 +341,7 @@ class Command(BaseCommand):
             return Path(self.migration_dir)
         return Path(apps.get_app_config(app_label).path) / "migrations"
 
-    def _handle_dry_run(self, migration_path: Path, triggers: Set[TriggerInfo]) -> None:
+    def _handle_dry_run(self, migration_path: Path, triggers: set[TriggerInfo]) -> None:
         """Handle dry run mode for migration creation.
 
         Args:
@@ -355,7 +352,7 @@ class Command(BaseCommand):
         if self.verbose:
             self.stdout.write(f"[DRY RUN] Would remove triggers: {', '.join(t.trigger_name for t in triggers)}")
 
-    def _confirm_creation(self, app_label: str, triggers: Set[TriggerInfo]) -> bool:
+    def _confirm_creation(self, app_label: str, triggers: set[TriggerInfo]) -> bool:
         """Prompt for user confirmation in interactive mode.
 
         Args:
@@ -373,7 +370,7 @@ class Command(BaseCommand):
             == "y"
         )
 
-    def _generate_migration_content(self, app_label: str, triggers: Set[TriggerInfo]) -> str:
+    def _generate_migration_content(self, app_label: str, triggers: set[TriggerInfo]) -> str:
         """Generate the content for the migration file.
 
         Args:

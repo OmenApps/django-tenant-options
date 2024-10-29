@@ -2,22 +2,22 @@
 
 from django.urls import path
 
-from .vews import home
-from .vews import task_create
-from .vews import task_list
-from .vews import task_priority_list
-from .vews import task_priority_option_create
-from .vews import task_priority_option_update
-from .vews import task_priority_selections_update
-from .vews import task_status_list
-from .vews import task_status_option_create
-from .vews import task_status_option_update
-from .vews import task_status_selections_update
-from .vews import task_update
-from .vews import tenant_create
-from .vews import tenant_list
-from .vews import tenant_update
-from .vews import user_tenant_update
+from .views import home
+from .views import task_create
+from .views import task_list
+from .views import task_priority_list
+from .views import task_priority_option_create
+from .views import task_priority_option_update
+from .views import task_priority_selections_update
+from .views import task_status_list
+from .views import task_status_option_create
+from .views import task_status_option_update
+from .views import task_status_selections_update
+from .views import task_update
+from .views import tenant_create
+from .views import tenant_list
+from .views import tenant_update
+from .views import user_tenant_update
 
 
 app_name = "example_project.example"

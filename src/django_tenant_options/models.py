@@ -1,7 +1,6 @@
 """Models for the Django Tenant Options app."""
 
 import logging
-from typing import List
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -14,6 +13,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from django_tenant_options import is_installed_less_than_version
 from django_tenant_options.app_settings import ASSOCIATED_TENANTS_RELATED_NAME
 from django_tenant_options.app_settings import ASSOCIATED_TENANTS_RELATED_QUERY_NAME
 from django_tenant_options.app_settings import OPTION_MODEL_RELATED_NAME
@@ -25,7 +25,7 @@ from django_tenant_options.app_settings import TENANT_MODEL_RELATED_QUERY_NAME
 from django_tenant_options.app_settings import TENANT_ON_DELETE
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
-from django_tenant_options.exceptions import InvalidDefaultOption
+from django_tenant_options.exceptions import InvalidDefaultOptionError
 
 
 logger = logging.getLogger("django_tenant_options")
@@ -52,9 +52,9 @@ def validate_model_has_attribute(model, attr: str, attr_type=None):
 class TenantOptionsCoreModelBase(ModelBase):
     """Base Metaclass for providing ForeignKey to a tenant model in other metaclasses."""
 
-    def __new__(mcs, name, bases, attrs, **kwargs):
+    def __new__(cls, name, bases, attrs, **kwargs):
         """Add ForeignKey to the tenant model class."""
-        model = super().__new__(mcs, name, bases, attrs, **kwargs)
+        model = super().__new__(cls, name, bases, attrs, **kwargs)
 
         for base in bases:
             if base.__name__ in ["AbstractSelection", "AbstractOption"]:
@@ -103,9 +103,9 @@ class OptionModelBase(TenantOptionsCoreModelBase):
             selection_model = "myapp.ConcreteSelection"
     """
 
-    def __new__(mcs, name, bases, attrs, **kwargs):
+    def __new__(cls, name, bases, attrs, **kwargs):
         """Add ManyToManyField to the model class."""
-        model = super().__new__(mcs, name, bases, attrs, **kwargs)
+        model = super().__new__(cls, name, bases, attrs, **kwargs)
 
         for base in bases:
             if base.__name__ == "AbstractOption":
@@ -150,9 +150,9 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
             option_model = "myapp.ConcreteOption"
     """
 
-    def __new__(mcs, name, bases, attrs, **kwargs):
+    def __new__(cls, name, bases, attrs, **kwargs):
         """Adds ForeignKey to the model class."""
-        model = super().__new__(mcs, name, bases, attrs, **kwargs)
+        model = super().__new__(cls, name, bases, attrs, **kwargs)
 
         for base in bases:
             if base.__name__ == "AbstractSelection":
@@ -197,7 +197,7 @@ class OptionQuerySet(models.QuerySet):
         return self.filter(option_type=OptionType.CUSTOM)
 
     def options_for_tenant(self, tenant, include_deleted=False) -> models.QuerySet:
-        """Returns all available options for a given tenant, as follows:
+        """Returns all available options for a given tenant, as below.
 
         - all required default options
         - all non-required default options
@@ -296,8 +296,8 @@ class OptionManager(models.Manager):
         for key, value in options_dict.items():
             if key == "option_type":
                 option_type = value  # Set the option_type variable to the value provided
-                if not option_type in [OptionType.MANDATORY, OptionType.OPTIONAL]:
-                    raise InvalidDefaultOption(
+                if option_type not in [OptionType.MANDATORY, OptionType.OPTIONAL]:
+                    raise InvalidDefaultOptionError(
                         f"Option defaults must be of type `OptionType.MANDATORY` or `OptionType.OPTIONAL`. "
                         f"You specified {key} = {value} for {item_name=}."
                     )
@@ -318,7 +318,6 @@ class OptionManager(models.Manager):
         - Add the `deleted` key to the default options dict
 
         Example:
-
         .. code-block:: python
 
             default_options = {
@@ -354,6 +353,28 @@ class OptionManager(models.Manager):
             updated_options[option.name] = {"deleted": True}
 
         return updated_options
+
+
+def get_constraint_dict():
+    """Return the constraint dictionary for the CheckConstraint in AbstractOption."""
+
+    def get_condition_argument_name():
+        """Get the name of the argument to pass to the CheckConstraint.
+
+        In Django 5.1.0, the argument name is changed from `check` to `condition`.
+        """
+        if is_installed_less_than_version("5.1.0"):
+            return "check"
+        return "condition"
+
+    # Options of type OptionType.CUSTOM must have a specified tenant, and Options of
+    # type OptionType.MANDATORY and OptionType.OPTIONAL must not have a specified tenant
+    return {
+        get_condition_argument_name(): Q(option_type=OptionType.CUSTOM, tenant__isnull=False)
+        | Q(option_type=OptionType.MANDATORY, tenant__isnull=True)
+        | Q(option_type=OptionType.OPTIONAL, tenant__isnull=True),
+        "name": "%(app_label)s_%(class)s_tenant_check",
+    }
 
 
 class AbstractOption(models.Model, metaclass=OptionModelBase):
@@ -402,6 +423,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
 
         verbose_name = _("Option")
         verbose_name_plural = _("Options")
+
         constraints = [
             # A tenant cannot have more than one option with the same name
             UniqueConstraint(
@@ -409,14 +431,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
                 "tenant",
                 name="%(app_label)s_%(class)s_unique_name",
             ),
-            # Options of type OptionType.CUSTOM must have a specified tenant, and Options of
-            # type OptionType.MANDATORY and OptionType.OPTIONAL must not have a specified tenant
-            CheckConstraint(
-                condition=Q(option_type=OptionType.CUSTOM, tenant__isnull=False)
-                | Q(option_type=OptionType.MANDATORY, tenant__isnull=True)
-                | Q(option_type=OptionType.OPTIONAL, tenant__isnull=True),
-                name="%(app_label)s_%(class)s_tenant_check",
-            ),
+            CheckConstraint(**get_constraint_dict()),
         ]
         abstract = True
 
@@ -445,7 +460,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
         return self.name
 
     @classmethod
-    def get_concrete_subclasses(cls) -> List:
+    def get_concrete_subclasses(cls) -> list:
         """Return a list of model classes which are subclassed from AbstractOption.
 
         Only include those models that are not themselves Abstract.
@@ -457,7 +472,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
         return result
 
     def clean(self):
-        """Ensure no tenant can have the same name as a MANDATORY or OPTIONAL option"""
+        """Ensure no tenant can have the same name as a MANDATORY or OPTIONAL option."""
         if self.option_type == OptionType.CUSTOM:
             conflicting_options = type(self).objects.filter(
                 name=self.name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL]
@@ -470,6 +485,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
         super().clean()
 
     def save(self, *args, **kwargs):
+        """Ensure that the option is valid before saving."""
         self.clean()
         super().save(*args, **kwargs)
 
@@ -603,6 +619,7 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
         super().clean()
 
     def save(self, *args, **kwargs):
+        """Ensure that the selection is valid before saving."""
         self.clean()
         super().save(*args, **kwargs)
 
@@ -621,7 +638,7 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
             self.save()
 
     @classmethod
-    def get_concrete_subclasses(cls) -> List:
+    def get_concrete_subclasses(cls) -> list:
         """Return a list of model classes which are subclassed from AbstractSelection.
 
         Only include those models that are not themselves Abstract.

@@ -23,7 +23,7 @@
 
 ## So your SaaS tenants want to provide end users with choices in a form...
 
-*How can you implement this?*
+_How can you implement this?_
 
 - **CharField with TextChoices or IntegerChoices**: Define a fixed set of options in your model.
   - ❌ One size fits all

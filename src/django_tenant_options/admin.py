@@ -9,22 +9,22 @@ logger = logging.getLogger("django_tenant_options")
 
 
 class BaseOptionsAdminMixin:
-    """Mixin providing functionality specific to Options models"""
+    """Mixin providing functionality specific to Options models."""
 
     search_fields = []
     list_display = []
 
 
 class BaseOptionsAdmin(BaseOptionsAdminMixin, admin.ModelAdmin):
-    """Base class for Options Admin classes"""
+    """Base class for Options Admin classes."""
 
 
 class SelectionsAdminMixin:
-    """Mixin providing functionality specific to Selections models"""
+    """Mixin providing functionality specific to Selections models."""
 
     search_fields = []
     list_display = []
 
 
 class BaseSelectionsAdmin(SelectionsAdminMixin, admin.ModelAdmin):
-    """Base class for Selections Admin classes"""
+    """Base class for Selections Admin classes."""

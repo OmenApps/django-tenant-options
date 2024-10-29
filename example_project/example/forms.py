@@ -72,6 +72,7 @@ class TenantForm(ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        """Initialize TenantForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -94,6 +95,7 @@ class TaskStatusOptionCreateForm(OptionCreateFormMixin, ModelForm):
         fields = ["name", "option_type", "tenant", "deleted"]
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskStatusOptionCreateForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -120,6 +122,7 @@ class TaskStatusOptionUpdateForm(OptionUpdateFormMixin, ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskStatusOptionUpdateForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -142,6 +145,7 @@ class TaskPriorityOptionCreateForm(OptionCreateFormMixin, ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskPriorityOptionCreateForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -167,6 +171,7 @@ class TaskPriorityOptionUpdateForm(OptionUpdateFormMixin, ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskPriorityOptionUpdateForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -189,6 +194,7 @@ class TaskStatusSelectionForm(SelectionsForm):
         # We do not need to specify the fields, as they are automatically generated based on the model.
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskStatusSelectionForm."""
         super().__init__(*args, **kwargs)
 
         # Example increasing widget size
@@ -214,6 +220,7 @@ class TaskPrioritySelectionForm(SelectionsForm):
         # We do not need to specify the fields, as they are automatically generated based on the model.
 
     def __init__(self, *args, **kwargs):
+        """Initialize TaskPrioritySelectionForm."""
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(

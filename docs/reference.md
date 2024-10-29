@@ -71,7 +71,6 @@
 .. autoclass:: django_tenant_options.management.commands.listoptions.Command
 ```
 
-
 ### `syncoptions`
 
 ```{eval-rst}
@@ -119,7 +118,6 @@
 
     (`int`) Provide detailed output of the migration creation process.
 ```
-
 
 ### `removetriggers`
 

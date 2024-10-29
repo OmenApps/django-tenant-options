@@ -13,5 +13,5 @@ class NoTenantProvidedFromViewError(Exception):
     """Used when a view does not pass an tenant instance from the view to a form."""
 
 
-class InvalidDefaultOption(Exception):
+class InvalidDefaultOptionError(Exception):
     """Used when a default option defined in a model is not `OptionType.MANDATORY` or `OptionType.OPTIONAL`."""

@@ -12,6 +12,7 @@ class MigrationTracker:
     """Tracks migration files created during tests."""
 
     def __init__(self):
+        """Initialize MigrationTracker."""
         self.initial_migrations = set()
 
     def snapshot_migrations(self):
@@ -45,9 +46,9 @@ def django_db_setup(django_db_setup, django_db_blocker):
     """Setup database for testing and handle migration cleanup."""
     with django_db_blocker.unblock():
         # Store initial migration state
-        initial_db_migrations = set(
+        initial_db_migrations = {
             (migration.app, migration.name) for migration in MigrationRecorder.Migration.objects.all()
-        )
+        }
 
         # Take snapshot of migration files
         migration_tracker.snapshot_migrations()
@@ -57,9 +58,9 @@ def django_db_setup(django_db_setup, django_db_blocker):
         # Clean up migrations created during testing
         with connection.cursor() as cursor:
             # Get current migrations
-            final_migrations = set(
+            final_migrations = {
                 (migration.app, migration.name) for migration in MigrationRecorder.Migration.objects.all()
-            )
+            }
 
             # Find and remove new migrations from database
             new_migrations = final_migrations - initial_db_migrations

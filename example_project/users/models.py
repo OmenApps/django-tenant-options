@@ -20,4 +20,5 @@ class User(AbstractUser):
     objects = CustomUserManager()
 
     def __str__(self):
+        """Return the username of the User."""
         return self.username

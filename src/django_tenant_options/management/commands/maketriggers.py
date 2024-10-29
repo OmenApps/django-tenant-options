@@ -16,8 +16,6 @@ from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
 from typing import Literal
-from typing import Optional
-from typing import Type
 
 from django.apps import AppConfig
 from django.apps import apps
@@ -43,7 +41,7 @@ class MigrationContext:
     model_name: str
     db_table: str
     trigger_name: str
-    migration_name: Optional[str] = None
+    migration_name: str | None = None
 
 
 class Command(BaseCommand):
@@ -68,13 +66,13 @@ class Command(BaseCommand):
     def __init__(self, *args, **kwargs):
         """Initialize command with default values for all configuration options."""
         super().__init__(*args, **kwargs)
-        self.context: Optional[MigrationContext] = None
+        self.context: MigrationContext | None = None
         self.force: bool = False
         self.dry_run: bool = False
-        self.migration_dir: Optional[str] = None
+        self.migration_dir: str | None = None
         self.interactive: bool = False
         self.verbose: bool = False
-        self.last_generated_migration: Optional[str] = None
+        self.last_generated_migration: str | None = None
         self.db_vendor: DBVendor = self._get_db_vendor()
 
     def create_parser(self, prog_name: str, subcommand: str, **kwargs) -> CommandParser:
@@ -180,7 +178,7 @@ class Command(BaseCommand):
         self.verbose = options.get("verbose", False)
         self.db_vendor = self._get_db_vendor(options.get("db_vendor_override"))
 
-    def _get_db_vendor(self, override: Optional[str] = None) -> DBVendor:
+    def _get_db_vendor(self, override: str | None = None) -> DBVendor:
         """Determine the database vendor to use.
 
         Args:
@@ -233,7 +231,7 @@ class Command(BaseCommand):
                 self._process_model(model)
 
     @staticmethod
-    def _should_process_model(model: Type[Model]) -> bool:
+    def _should_process_model(model: type[Model]) -> bool:
         """Determine if a model should have triggers generated.
 
         Args:
@@ -244,7 +242,7 @@ class Command(BaseCommand):
         """
         return issubclass(model, AbstractSelection) and model != AbstractSelection
 
-    def _process_model(self, model: Type[Model]) -> None:
+    def _process_model(self, model: type[Model]) -> None:
         """Process a single model for trigger migration generation.
 
         Args:
@@ -266,6 +264,40 @@ class Command(BaseCommand):
 
         self._create_migration()
 
+    def _validate_identifier(self, identifier: str) -> bool:
+        """Validate that an identifier contains only allowed characters.
+
+        Args:
+            identifier: The database identifier to validate
+
+        Returns:
+            bool: True if identifier is valid, False otherwise
+        """
+        # Only allow alphanumeric, underscore, and dot for schema qualified names
+        return bool(re.match(r"^[a-zA-Z0-9_\.]+$", identifier))
+
+    def _quote_identifier(self, identifier: str) -> str:
+        """Properly quote a database identifier.
+
+        Args:
+            identifier: The database identifier to quote
+
+        Returns:
+            str: The properly quoted identifier
+
+        Raises:
+            ValueError: If identifier contains invalid characters
+        """
+        if not self._validate_identifier(identifier):
+            raise ValueError(
+                f"Invalid identifier {identifier}. Only alphanumeric characters, underscores, and dots are allowed."
+            )
+
+        # Handle schema qualified names
+        parts = identifier.split(".")
+        quoted_parts = [f'"{part}"' for part in parts]
+        return ".".join(quoted_parts)
+
     def _construct_trigger_name(self, db_table: str) -> str:
         """Construct a valid trigger name for the given database table.
 
@@ -273,19 +305,35 @@ class Command(BaseCommand):
             db_table: Name of the database table
 
         Returns:
-            Constructed trigger name
+            Constructed trigger name that is safe to use
+
+        Raises:
+            ValueError: If table name contains invalid characters
         """
         max_length = connection.ops.max_name_length() or 200
-        # base_name = f"{db_table.replace('"', '').replace('.', '_')}_tenant_check"
-        replaced_db_table = db_table.replace('"', "").replace(".", "_")
-        base_name = f"{replaced_db_table}_tenant_check"
-        name_hash = hashlib.sha1(base_name.encode()).hexdigest()[:10]
+
+        # Remove quotes and schemas, replace dots with underscores
+        cleaned_table = db_table.replace('"', "").replace(".", "_")
+
+        if not self._validate_identifier(cleaned_table):
+            raise ValueError(
+                f"Invalid table name {db_table}. Only alphanumeric characters, underscores, and dots are allowed."
+            )
+
+        base_name = f"{cleaned_table}_tenant_check"
+        name_hash = hashlib.sha1(base_name.encode(), usedforsecurity=False).hexdigest()[:10]
 
         # Ensure name starts with a letter
         if base_name[0] in ("_", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"):
             base_name = f"t{base_name[:-1]}"
 
-        return f"{base_name[:max_length - len(name_hash) - 1]}_{name_hash}"
+        trigger_name = f"{base_name[:max_length - len(name_hash) - 1]}_{name_hash}"
+
+        # Validate final trigger name
+        if not self._validate_identifier(trigger_name):
+            raise ValueError(f"Generated trigger name {trigger_name} contains invalid characters")
+
+        return trigger_name
 
     def _create_migration(self) -> None:
         """Create a new migration file for the current model context."""
@@ -302,7 +350,7 @@ class Command(BaseCommand):
         else:
             self._handle_migration_creation(migration_path, last_migration)
 
-    def _get_last_migration(self) -> Optional[str]:
+    def _get_last_migration(self) -> str | None:
         """Get the name of the last migration for the current app.
 
         Returns:
@@ -315,7 +363,7 @@ class Command(BaseCommand):
 
         return last_migration.name if last_migration else None
 
-    def _construct_migration_name(self, last_migration: Optional[str]) -> str:
+    def _construct_migration_name(self, last_migration: str | None) -> str:
         """Construct a name for the new migration file.
 
         Args:
@@ -352,7 +400,7 @@ class Command(BaseCommand):
                 "[DRY RUN] Migration content:\n" f"{self._get_migration_content(self._get_last_migration())}"
             )
 
-    def _handle_migration_creation(self, migration_path: Path, last_migration: Optional[str]) -> None:
+    def _handle_migration_creation(self, migration_path: Path, last_migration: str | None) -> None:
         """Handle actual migration file creation.
 
         Args:
@@ -377,7 +425,7 @@ class Command(BaseCommand):
         """
         return input(f"Do you want to create a migration for {self.context.model_name}? (y/n): ").lower() == "y"
 
-    def _get_migration_content(self, last_migration: Optional[str]) -> str:
+    def _get_migration_content(self, last_migration: str | None) -> str:
         """Generate the content for the migration file.
 
         Args:
@@ -434,88 +482,85 @@ class Command(BaseCommand):
         return trigger_templates[self.db_vendor]()
 
     def _get_sqlite_trigger(self) -> str:
-        """Generate SQLite-specific trigger SQL.
+        """Generate SQLite-specific trigger SQL with proper quoting."""
+        trigger_name = self._quote_identifier(self.context.trigger_name)
+        table_name = self._quote_identifier(self.context.db_table)
 
-        Returns:
-            SQL string for creating the SQLite trigger
-        """
         return f"""
-            DROP TRIGGER IF EXISTS {self.context.trigger_name};
-            CREATE TRIGGER {self.context.trigger_name}
-            BEFORE INSERT ON {self.context.db_table}
+            DROP TRIGGER IF EXISTS {trigger_name};
+            CREATE TRIGGER {trigger_name}
+            BEFORE INSERT ON {table_name}
             FOR EACH ROW
-            WHEN NEW.tenant_id != (SELECT tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id)
+            WHEN NEW.tenant_id != (SELECT tenant_id FROM {table_name} WHERE id = NEW.option_id)
             BEGIN
-                SELECT RAISE(FAIL, 'Tenant mismatch between {self.context.db_table} and the associated Option');
+                SELECT RAISE(FAIL, 'Tenant mismatch between options and selections');
             END;
-            """
+            """  # nosec
 
     def _get_postgresql_trigger(self) -> str:
-        """Generate PostgreSQL-specific trigger SQL.
+        """Generate PostgreSQL-specific trigger SQL with proper quoting."""
+        trigger_name = self._quote_identifier(self.context.trigger_name)
+        table_name = self._quote_identifier(self.context.db_table)
+        function_name = self._quote_identifier(f"{self.context.trigger_name}_func")
 
-        Returns:
-            SQL string for creating the PostgreSQL trigger and function
-        """
         return f"""
-            CREATE OR REPLACE FUNCTION {self.context.trigger_name}()
+            CREATE OR REPLACE FUNCTION {function_name}()
             RETURNS TRIGGER AS $$
             BEGIN
-                IF NEW.tenant_id != (SELECT tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id) THEN
-                    RAISE EXCEPTION 'Tenant mismatch between {self.context.db_table} and the associated Option';
+                IF NEW.tenant_id != (SELECT tenant_id FROM {table_name} WHERE id = NEW.option_id) THEN
+                    RAISE EXCEPTION 'Tenant mismatch between options and selections';
                 END IF;
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
 
-            DROP TRIGGER IF EXISTS {self.context.trigger_name} ON {self.context.db_table};
-            CREATE TRIGGER {self.context.trigger_name}
-            BEFORE INSERT ON {self.context.db_table}
+            DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
+            CREATE TRIGGER {trigger_name}
+            BEFORE INSERT ON {table_name}
             FOR EACH ROW
-            EXECUTE FUNCTION {self.context.trigger_name}();
-            """
+            EXECUTE FUNCTION {function_name}();
+            """  # nosec
 
     def _get_mysql_trigger(self) -> str:
-        """Generate MySQL-specific trigger SQL.
+        """Generate MySQL-specific trigger SQL with proper quoting."""
+        trigger_name = self._quote_identifier(self.context.trigger_name)
+        table_name = self._quote_identifier(self.context.db_table)
 
-        Returns:
-            SQL string for creating the MySQL trigger
-        """
         return f"""
-            DROP TRIGGER IF EXISTS {self.context.trigger_name};
-            CREATE TRIGGER {self.context.trigger_name}
-            BEFORE INSERT ON {self.context.db_table}
+            DROP TRIGGER IF EXISTS {trigger_name};
+            CREATE TRIGGER {trigger_name}
+            BEFORE INSERT ON {table_name}
             FOR EACH ROW
             BEGIN
                 DECLARE option_tenant_id INT;
-                SELECT tenant_id INTO option_tenant_id FROM {self.context.db_table} WHERE id = NEW.option_id;
+                SELECT tenant_id INTO option_tenant_id FROM {table_name} WHERE id = NEW.option_id;
 
                 IF NEW.tenant_id != option_tenant_id THEN
                     SIGNAL SQLSTATE '45000'
-                    SET MESSAGE_TEXT = 'Tenant mismatch between {self.context.db_table} and the associated Option';
+                    SET MESSAGE_TEXT = 'Tenant mismatch between options and selections';
                 END IF;
             END;
-            """
+            """  # nosec
 
     def _get_oracle_trigger(self) -> str:
-        """Generate Oracle-specific trigger SQL.
+        """Generate Oracle-specific trigger SQL with proper quoting."""
+        trigger_name = self._quote_identifier(self.context.trigger_name)
+        table_name = self._quote_identifier(self.context.db_table)
 
-        Returns:
-            SQL string for creating the Oracle trigger
-        """
         return f"""
-            CREATE OR REPLACE TRIGGER {self.context.trigger_name}
-            BEFORE INSERT ON {self.context.db_table}
+            CREATE OR REPLACE TRIGGER {trigger_name}
+            BEFORE INSERT ON {table_name}
             FOR EACH ROW
             DECLARE
                 option_tenant_id NUMBER;
             BEGIN
-                SELECT tenant_id INTO option_tenant_id FROM {self.context.db_table} WHERE id = :NEW.option_id;
+                SELECT tenant_id INTO option_tenant_id FROM {table_name} WHERE id = :NEW.option_id;
 
                 IF :NEW.tenant_id != option_tenant_id THEN
-                    RAISE_APPLICATION_ERROR(-20001, 'Tenant mismatch between {self.context.db_table} and the associated Option');
+                    RAISE_APPLICATION_ERROR(-20001, 'Tenant mismatch between options and selections');
                 END IF;
             END;
-            """
+            """  # nosec
 
     def _log_model_processing(self) -> None:
         """Log information about the model being processed."""
@@ -557,7 +602,7 @@ class Command(BaseCommand):
             )
         )
 
-    def _trigger_exists(self) -> Optional[str]:
+    def _trigger_exists(self) -> str | None:
         """Check if a trigger for the model already exists in any applied migration.
 
         Returns:
