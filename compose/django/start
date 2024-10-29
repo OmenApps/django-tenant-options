@@ -4,5 +4,6 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-python manage.py migrate --noinput --skip-checks
-python manage.py runserver 0.0.0.0:8111 --skip-checks
+uv run --prerelease=allow python manage.py makemigrations --noinput --skip-checks
+uv run --prerelease=allow python manage.py migrate --noinput --skip-checks
+uv run --prerelease=allow python manage.py runserver 0.0.0.0:8111 --skip-checks

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.48.0-jammy
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm
 
 ARG BUILD_ENVIRONMENT=local
 ARG APP_HOME=/app
@@ -11,18 +11,19 @@ ENV BUILD_ENV ${BUILD_ENVIRONMENT}
 ENV MULTIPLE_PYTHON=True
 
 WORKDIR ${APP_HOME}
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Install apt packages
 RUN apt-get update
 RUN apt-get install -y \
     # Some basic tools and libraries
-    bash curl wget git make \
+    bash curl wget git make gcc libc6 \
     build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
     libsqlite3-dev llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev \
     libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev python3-pip
 
-# Install uv
-RUN pip install --upgrade uv
+# Update pip
+RUN pip install --upgrade pip cffi
 
 # Install multiple Python versions with uv
 RUN if [ "$MULTIPLE_PYTHON" = "True" ] ; then \
@@ -31,9 +32,6 @@ RUN if [ "$MULTIPLE_PYTHON" = "True" ] ; then \
     uv python install 3.12; \
     uv python install 3.13; \
     fi
-
-# Add the venv
-RUN uv venv
 
 # Copy requirements files
 COPY pyproject.toml uv.lock requirements.txt ${APP_HOME}/
@@ -48,7 +46,8 @@ COPY ./src/ ${APP_HOME}/
 COPY ./src/ ${APP_HOME}/src/
 
 # Install dependencies using uv
-RUN uv sync --prerelease=allow --extra dev
+RUN uv venv --python 3.11
+RUN uv sync --prerelease=allow
 
 # Project initialization:
 COPY ./compose/django/entrypoint /entrypoint
