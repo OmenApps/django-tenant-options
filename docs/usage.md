@@ -344,3 +344,231 @@ class TaskPriorityOption(AbstractOption):
    ```
 
 For more information on the available settings, see the [`app_settings.py` reference](https://django-tenant-options.readthedocs.io/en/latest/reference.html#module-django_tenant_options.app_settings).
+
+## Local Development
+
+### Setting Up Your Development Environment
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/OmenApps/django-tenant-options.git
+cd django-tenant-options
+```
+
+2. Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+```
+
+3. Install development dependencies using `uv`:
+
+```bash
+pip install uv
+uv sync --prerelease=allow --extra=dev
+```
+
+### Example Project
+
+The repository includes an example project that demonstrates the package's functionality. Since migrations aren't included, you'll need to create them:
+
+```bash
+cd example_project
+python manage.py makemigrations
+python manage.py migrate
+```
+
+### Using Nox for Development Tasks
+
+We use Nox for automated testing and development tasks. Our `noxfile.py` includes several useful sessions:
+
+```bash
+# List all available Nox sessions
+nox --list
+
+# Run all default sessions
+nox
+
+# Run specific sessions
+nox -s pre-commit        # Run pre-commit checks
+nox -s safety           # Check dependencies for security issues
+nox -s tests           # Run test suite
+nox -s xdoctest        # Run examples in docstrings
+nox -s docs-build      # Build documentation
+nox -s docs            # Serve documentation with live reload
+```
+
+#### Running Tests
+
+Tests can be run against different Python and Django versions:
+
+```bash
+# Run tests with default Python/Django versions
+nox -s tests
+
+# Run tests with specific Python/Django versions
+nox -s tests -- python="3.12" django="5.1"
+
+# Run specific test file
+nox -s tests -- example_project/tests/test_models.py
+
+# Run with pytest options
+nox -s tests -- -v --pdb
+```
+
+#### Building Documentation
+
+For documentation development:
+
+```bash
+# Build docs once
+nox -s docs-build
+
+# Serve docs with live reload
+nox -s docs
+
+# Build docs for specific Django version
+nox -s docs-build -- django="5.1"
+```
+
+#### Code Quality Checks
+
+```bash
+# Run all pre-commit hooks
+nox -s pre-commit
+
+# Run security checks
+nox -s safety
+
+# Run example tests
+nox -s xdoctest
+```
+
+### Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality. Install them with:
+
+```bash
+nox -s pre-commit -- install
+```
+
+This will set up the following hooks:
+
+- Black (code formatting)
+- isort (import sorting)
+- Flake8 (code linting)
+- Various other code quality checks
+
+### Database Configuration
+
+By default, the example project uses SQLite. For development with other databases:
+
+```python
+# example_project/settings.py
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'tenant_options_dev',
+        'USER': 'your_user',
+        'PASSWORD': 'your_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+```
+
+### Creating Database Triggers
+
+After setting up your database and running migrations, create the necessary database triggers:
+
+```bash
+python manage.py maketriggers
+python manage.py migrate
+```
+
+### Workflow Tips
+
+1. **Branch Management**
+
+   - Create feature branches from `main`
+   - Use descriptive branch names (e.g., `feature/add-new-option-type`)
+   - Keep branches up to date with `main`
+
+2. **Testing**
+
+   - Write tests for new features
+   - Run the full test suite before submitting PRs
+   - Test with multiple Python/Django versions using Nox
+
+3. **Documentation**
+
+   - Update docs for new features
+   - Run docs locally to preview changes
+   - Include docstrings for new code
+
+4. **Code Quality**
+   - Run pre-commit hooks before committing
+   - Address all linting issues
+   - Follow the existing code style
+
+### Common Issues and Solutions
+
+1. **Database Trigger Conflicts**
+
+   ```bash
+   # If you encounter trigger conflicts, force recreate them
+   python manage.py maketriggers --force
+   python manage.py migrate
+   ```
+
+2. **Pre-commit Hook Failures**
+
+   ```bash
+   # Re-run failed hooks
+   pre-commit run --all-files
+
+   # Update pre-commit hooks
+   pre-commit autoupdate
+   ```
+
+3. **Documentation Build Errors**
+   ```bash
+   # Clean and rebuild
+   rm -rf docs/_build
+   nox -s docs-build
+   ```
+
+### Additional Resources
+
+- Check the [Contributing Guide](https://django-tenant-options.readthedocs.io/en/latest/contributing.html) for detailed contribution guidelines
+- Review our [Code of Conduct](https://django-tenant-options.readthedocs.io/en/latest/codeofconduct.html)
+- Join discussions in the [GitHub Issues](https://github.com/OmenApps/django-tenant-options/issues) section
+
+### Submitting Changes
+
+1. Ensure all tests pass:
+
+   ```bash
+   nox -s tests
+   ```
+
+2. Build and check documentation:
+
+   ```bash
+   nox -s docs-build
+   ```
+
+3. Run all quality checks:
+
+   ```bash
+   nox -s pre-commit -- run --all-files
+   ```
+
+4. Create a pull request with:
+   - Clear description of changes
+   - Any related issue numbers
+   - Notes about breaking changes
+   - Updates to documentation
