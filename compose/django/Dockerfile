@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV BUILD_ENV ${BUILD_ENVIRONMENT}
 ENV MULTIPLE_PYTHON=True
+ENV PYTHONPATH="${APP_HOME}:${APP_HOME}/src:${PYTHONPATH:-}"
+ENV DJANGO_SETTINGS_MODULE=example_project.settings
 
 WORKDIR ${APP_HOME}
 ENV PATH="/app/.venv/bin:$PATH"
@@ -42,7 +44,6 @@ COPY .darglint .editorconfig .flake8 .gitignore .pre-commit-config.yaml .prettie
 COPY CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md LICENSE README.md ${APP_HOME}
 COPY ./docs/ ${APP_HOME}/docs
 COPY ./example_project/ ${APP_HOME}/example_project/
-COPY ./src/ ${APP_HOME}/
 COPY ./src/ ${APP_HOME}/src/
 
 # Install dependencies using uv
