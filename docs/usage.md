@@ -22,6 +22,8 @@ INSTALLED_APPS = [
 
 2. Configure the required settings in your `settings.py`:
 
+Only the `TENANT_MODEL` setting is required. The other settings have default values that can be overridden if needed for advanced customization.
+
 ```python
 DJANGO_TENANT_OPTIONS = {
     "TENANT_MODEL": "yourapp.Tenant",  # Required
@@ -233,14 +235,27 @@ class TaskPriorityOptionCreateView(LoginRequiredMixin, CreateView):
 
 ### 1. Creating Database Triggers
 
-After setting up your models, create database triggers to ensure referential integrity:
+`django-tenant-options` can automatically create database triggers migrations for referential integrity.
+
+To do this, after setting up your models, run the following commands:
 
 ```bash
 python manage.py maketriggers
 python manage.py migrate
 ```
 
-### 2. Synchronizing Default Options
+### 2. Removing Database Triggers
+
+`django-tenant-options` can also remove the database triggers if needed. New migrations will be created to reflect the changes.
+
+To remove database triggers, run the following command:
+
+```bash
+python manage.py removetriggers
+python manage.py migrate
+```
+
+### 3. Synchronizing Default Options
 
 After updating default options in your models:
 
@@ -327,6 +342,8 @@ class TaskPriorityOption(AbstractOption):
    ```
 
 2. **Caching**
+
+*We are in the process of adding caching support to the package. In the meantime, you can implement your own caching mechanism:*
 
    ```python
    # Cache frequently used options
@@ -480,7 +497,7 @@ DATABASES = {
 
 ### Creating Database Triggers
 
-After setting up your database and running migrations, create the necessary database triggers:
+After setting up your database and running migrations, create database triggers, if desired:
 
 ```bash
 python manage.py maketriggers
