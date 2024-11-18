@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-tenant-options"
-version = "2024.10.2"
+version = "2024.11.1"
 description = "Empowering Your SaaS Tenants with Custom Options and Sane Defaults"
 authors = [{ name = "Jack Linke", email = "jacklinke@gmail.com" }]
 license = { text = "MIT" }
