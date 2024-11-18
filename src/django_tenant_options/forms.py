@@ -266,7 +266,7 @@ class UserFacingFormMixin:
 
     def _filter_queryset_for_tenant(self, field):
         """Filter the queryset to only show options selected for the tenant."""
-        field.queryset = field.queryset.model.objects.options_for_tenant(self.tenant)
+        field.queryset = field.queryset.model.objects.selected_options_for_tenant(self.tenant)
 
     def _set_field_initial_value(self, field_name):
         """Set the initial value for the field if there's an instance."""
