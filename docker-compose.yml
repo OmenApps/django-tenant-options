@@ -1,6 +1,3 @@
-volumes:
-  postgres_data:
-
 services:
   django_test:
     build:
@@ -8,17 +5,11 @@ services:
       dockerfile: ./compose/django/Dockerfile
     image: django_tenant_options
     container_name: django_test
-
+    volumes:
+      - ./example_project:/app/example_project
+      - ./src:/app/src
     env_file:
       - ./compose/django/.django
     ports:
       - "8111:8111"
     command: /start
-
-  postgres:
-    image: postgres:16
-    container_name: django_test_postgres
-    ports:
-      - "5437:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
