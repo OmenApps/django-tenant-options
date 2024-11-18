@@ -21,7 +21,7 @@ class Command(BaseCommand):
             model_subclasses = all_option_subclasses()
 
             if not model_subclasses:
-                print("No options found in the project.")
+                self.stdout.write(self.style.NOTICE("No options found in the project."))
                 return
 
             for ModelClass in all_option_subclasses():  # pylint: disable=C0103
@@ -29,10 +29,10 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("  Options:"))
                 for option in ModelClass.objects.active():
                     if option.tenant is not None:
-                        print(f"    - {option.name} (Tenant: {option.tenant})")
+                        self.stdout.write(f"    - {option.name} (Tenant: {option.tenant})")
                     else:
-                        print(f"    - {option.name}")
-                print()
+                        self.stdout.write(f"    - {option.name}")
+                self.stdout.write("")
         except Exception as e:  # pylint: disable=W0703
             logger.error("Error: %s", e)
 

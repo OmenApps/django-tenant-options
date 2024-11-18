@@ -10,17 +10,20 @@ Here is what it should look like in the settings.py file of the project:
     }
 
 """
+import logging
 
 from django.core.exceptions import ImproperlyConfigured
 
 
+logger = logging.getLogger(__name__)
+
 try:
     from django.conf import settings
-except ImproperlyConfigured:
-    print("**** ImproperlyConfigured")
+except ImproperlyConfigured as e:
+    logger.error("Settings could not be imported: %s", e)
     settings = None  # pylint: disable=C0103
-except ImportError:
-    print("**** ImportError")
+except ImportError as e:
+    logger.error("Django could not be imported. Settings cannot be loaded: %s", e)
     settings = None  # pylint: disable=C0103
 from django.db import models
 
