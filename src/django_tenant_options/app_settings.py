@@ -86,10 +86,14 @@ OPTION_MODEL_RELATED_QUERY_NAME = _DJANGO_TENANT_OPTIONS.get(
 """str: The related query name template to use for all Option models."""
 
 DB_VENDOR_OVERRIDE = _DJANGO_TENANT_OPTIONS.get("DB_VENDOR_OVERRIDE", None)
-"""str: The database vendor to use for the tenant options if the default is not one of the supported vendors.
+"""str: The database vendor to use for generating triggers if the default is not one of the supported vendors.
 
 In some cases, you may use a custom database backend, but the underlying database is still one of the supported
-vendors (e.g. 'postgresql'). In this case, you can specify that supported database vendor here.
+vendors. In this case, you can specify that supported database vendor here.
+
+An example of this is if you are using Django's Postgis backend, but the underlying database is still PostgreSQL.
+
+Allowed values are 'postgresql', 'mysql', 'sqlite', 'oracle'.
 """
 
 DEFAULT_MULTIPLE_CHOICE_FIELD = _DJANGO_TENANT_OPTIONS.get(
