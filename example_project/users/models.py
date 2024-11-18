@@ -11,7 +11,7 @@ class User(AbstractUser):
     """Custom User model with username as the unique identifier."""
 
     username = username = models.CharField(_("username"), max_length=150, unique=True)
-    email = models.EmailField(_("email address"), unique=True, blank=True)
+    email = models.EmailField(_("email address"), null=True, blank=True)
     tenant = models.ForeignKey("example.Tenant", on_delete=models.CASCADE, null=True, blank=True)
 
     USERNAME_FIELD = "username"
