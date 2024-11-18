@@ -40,15 +40,14 @@
       </dt>
       <dd class="col-sm-9">
         Option Type:
-        <span class="{{ task_status_option.get_option_type_display }}"
-          >{{ task_status_option.get_option_type_display }}</span
-        >; Tenant: {{ task_status_option.tenant }} {% if
-        task_status_option.option_type == 'cu' %}
-        <button
-          class="btn btn-sm btn-primary"
-          onclick="window.location.href = '{% url 'example:task_status_option_update' task_status_option_id=task_status_option.id  %}';"
-        >
-          Update
+        <span class="{{ task_status_option.get_option_type_display }}">
+            {{ task_status_option.get_option_type_display }}
+        </span>; Tenant: {{ task_status_option.tenant }}
+        {% if task_status_option.option_type == 'cu' %}
+            <button class="btn btn-sm btn-primary"
+                    onclick="window.location.href = '{% url 'example:task_status_option_update' task_status_option_id=task_status_option.id  %}';"
+            >
+            Update
         </button>
         {% endif %}
       </dd>

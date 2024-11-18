@@ -40,16 +40,15 @@
       </dt>
       <dd class="col-sm-9">
         Option Type:
-        <span class="{{ task_priority_option.get_option_type_display }}"
-          >{{ task_priority_option.get_option_type_display }}</span
-        >; Tenant: {{ task_priority_option.tenant }} {% if
-        task_priority_option.option_type == 'cu' %}
-        <button
-          class="btn btn-sm btn-primary"
-          onclick="window.location.href = '{% url 'example:task_priority_option_update' task_priority_option_id=task_priority_option.id  %}';"
-        >
-          Update
-        </button>
+        <span class="{{ task_priority_option.get_option_type_display }}">
+            {{ task_priority_option.get_option_type_display }}
+        </span>; Tenant: {{ task_priority_option.tenant }}
+        {% if task_priority_option.option_type == 'cu' %}
+            <button class="btn btn-sm btn-primary"
+                    onclick="window.location.href = '{% url 'example:task_priority_option_update' task_priority_option_id=task_priority_option.id  %}';"
+            >
+            Update
+            </button>
         {% endif %}
       </dd>
       {% endfor %}

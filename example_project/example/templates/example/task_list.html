@@ -27,8 +27,7 @@
     {% for task in tasks %}
     <dt class="col-sm-3">{{ forloop.counter }} {{ task.title }}</dt>
     <dd class="col-sm-9">
-      Priority: {{ task.priority }}; Status: {{ task.status }} {% if task.user
-      == request.user %}
+      Priority: {{ task.priority }}; Status: {{ task.status }} {% if task.user == request.user %}
       <button
         class="btn btn-sm btn-primary"
         onclick="window.location.href = '{% url 'example:task_update' task_id=task.id  %}';"
