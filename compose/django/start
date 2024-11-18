@@ -6,4 +6,5 @@ set -o nounset
 
 uv run --prerelease=allow python manage.py makemigrations --noinput --skip-checks
 uv run --prerelease=allow python manage.py migrate --noinput --skip-checks
+uv run --prerelease=allow python manage.py loaddata testdata.json --skip-checks
 uv run --prerelease=allow python manage.py runserver 0.0.0.0:8111 --skip-checks
