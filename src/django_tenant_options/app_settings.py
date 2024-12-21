@@ -40,18 +40,22 @@ if import_error:
 def import_string(dotted_path):
     """Import a dotted module path and return the attribute/class designated by the last name."""
     try:
-        module_path, class_name = dotted_path.rsplit('.', 1)
+        module_path, class_name = dotted_path.rsplit(".", 1)
     except ValueError as err:
+        logger.exception("Failed to parse dotted_path '%s': %s", dotted_path, err)
         raise ImportError(f"{dotted_path} doesn't look like a module path") from err
 
     try:
         module = importlib.import_module(module_path)
+        logger.debug("Successfully imported module '%s' for dotted_path '%s'", module_path, dotted_path)
     except ImportError as err:
+        logger.exception("Failed to import module '%s': %s", module_path, err)
         raise ImportError(f"Module {module_path} does not exist") from err
 
     try:
         return getattr(module, class_name)
     except AttributeError as err:
+        logger.exception("Module '%s' does not define '%s': %s", module_path, class_name, err)
         raise ImportError(f"Module {module_path} does not define {class_name}") from err
 
 
@@ -79,7 +83,7 @@ class ModelClassConfig:
     def _import_string(self, dotted_path):
         """Import a dotted module path and return the attribute/class designated by the last name."""
         try:
-            module_path, class_name = dotted_path.rsplit('.', 1)
+            module_path, class_name = dotted_path.rsplit(".", 1)
         except ValueError as err:
             raise ImportError(f"{dotted_path} doesn't look like a module path") from err
 

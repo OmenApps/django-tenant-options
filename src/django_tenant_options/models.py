@@ -1,9 +1,11 @@
 """Models for the Django Tenant Options app."""
 
 import logging
+import traceback
 
 from django.apps import apps
 from django.core.checks import Error
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Manager
@@ -29,11 +31,75 @@ from django_tenant_options.app_settings import model_config
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
 from django_tenant_options.exceptions import InvalidDefaultOptionError
+from django_tenant_options.exceptions import ModelValidationError
 
 from .checks import check_manager_compliance
 
 
 logger = logging.getLogger("django_tenant_options")
+
+
+def validate_model_relationship(model_class, field_name, related_model):
+    """Validate model relationships with detailed error messages."""
+    try:
+        if not hasattr(model_class, field_name):
+            raise ModelValidationError(f"Missing required field '{field_name}' on {model_class.__name__}")
+
+        field = getattr(model_class, field_name)
+
+        # Special handling for model reference strings (e.g. 'app.Model')
+        if field_name.endswith("_model"):
+            if not isinstance(field, str):
+                raise ModelValidationError(
+                    f"Invalid type for '{field_name}' on {model_class.__name__}. "
+                    f"Expected string (e.g. 'app.Model'), got {type(field).__name__}"
+                )
+            if not "." in field:
+                raise ModelValidationError(
+                    f"Invalid format for '{field_name}' on {model_class.__name__}. "
+                    f"Expected 'app.Model' format, got '{field}'"
+                )
+        # Special handling for on_delete fields
+        elif field_name.endswith("_on_delete"):
+            if not field in [
+                models.CASCADE,
+                models.PROTECT,
+                models.SET_NULL,
+                models.SET_DEFAULT,
+                models.SET,
+                models.DO_NOTHING,
+            ]:
+                raise ModelValidationError(
+                    f"Invalid on_delete value for '{field_name}' on {model_class.__name__}. "
+                    f"Expected a valid on_delete function (e.g. models.CASCADE)"
+                )
+        # Special handling for relationship fields that become descriptors
+        elif field_name in ["tenant", "option"]:
+            if not (hasattr(field, "field") and isinstance(field.field, models.ForeignKey)):
+                raise ModelValidationError(
+                    f"Invalid relationship field '{field_name}' on {model_class.__name__}. "
+                    f"Expected ForeignKey relationship"
+                )
+        elif field_name == "associated_tenants":
+            if not (hasattr(field, "field") and isinstance(field.field, models.ManyToManyField)):
+                raise ModelValidationError(
+                    f"Invalid relationship field '{field_name}' on {model_class.__name__}. "
+                    f"Expected ManyToManyField relationship"
+                )
+        else:
+            if not isinstance(field, related_model) and not issubclass(type(field), related_model):
+                raise ModelValidationError(
+                    f"Invalid type for '{field_name}' on {model_class.__name__}. "
+                    f"Expected {related_model.__name__}, got {type(field).__name__}"
+                )
+
+        logger.debug(
+            "Validated relationship %s on %s (type: %s)", field_name, model_class.__name__, type(field).__name__
+        )
+
+    except Exception as e:
+        logger.error("Failed to validate model relationship: %s\n%s", str(e), traceback.format_exc())
+        raise
 
 
 def get_all_managers(model):
@@ -59,8 +125,12 @@ def get_all_managers(model):
 
 def validate_model_is_concrete(model):
     """Raises an error if the provided model class is abstract."""
-    if model._meta.abstract:  # pylint: disable=W0212
-        raise IncorrectSubclassError(f"Model {model.__name__} is abstract.")
+    try:
+        if model._meta.abstract:
+            raise IncorrectSubclassError(f"Model {model.__name__} is abstract.")
+    except IncorrectSubclassError as exc:
+        logger.exception("validate_model_is_concrete error: %s", exc)
+        raise
 
 
 def validate_model_has_attribute(model, attr: str, attr_type=None):
@@ -68,11 +138,14 @@ def validate_model_has_attribute(model, attr: str, attr_type=None):
 
     If `attr_type` is not specified, the function only checks that the attribute is present.
     """
-    if hasattr(model, attr):
-        if attr_type is not None and not isinstance(getattr(model, attr), attr_type):
+    try:
+        if not hasattr(model, attr):
+            raise AttributeError(f"Model {model.__name__} is missing attribute {attr}.")
+        if attr_type and not isinstance(getattr(model, attr), attr_type):
             raise AttributeError(f"Model {model.__name__} has incorrect type for attribute {attr}.")
-    else:
-        raise AttributeError(f"Model {model.__name__} is missing attribute {attr}.")
+    except AttributeError as exc:
+        logger.exception("validate_model_has_attribute error: %s", exc)
+        raise
 
 
 class TenantOptionsCoreModelBase(ModelBase):
@@ -80,34 +153,45 @@ class TenantOptionsCoreModelBase(ModelBase):
 
     def __new__(cls, name, bases, attrs, **kwargs):
         """Add ForeignKey to the tenant model class."""
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
+        model = None
+        try:
+            model = super().__new__(cls, name, bases, attrs, **kwargs)
+            for base in bases:
+                if base.__name__ in ["AbstractSelection", "AbstractOption"]:
+                    ConcreteModel = model  # pylint: disable=C0103
 
-        for base in bases:
-            if base.__name__ in ["AbstractSelection", "AbstractOption"]:
-                ConcreteModel = model  # pylint: disable=C0103
+                    validate_model_has_attribute(ConcreteModel, "tenant_model")
+                    validate_model_has_attribute(ConcreteModel, "tenant_on_delete")
 
-                validate_model_has_attribute(ConcreteModel, "tenant_model")
-                validate_model_has_attribute(ConcreteModel, "tenant_on_delete")
+                    validate_model_relationship(ConcreteModel, "tenant_model", str)
+                    validate_model_relationship(ConcreteModel, "tenant_on_delete", models.Field)
 
-                validate_model_is_concrete(ConcreteModel)
+                    validate_model_is_concrete(ConcreteModel)
 
-                fields = {
-                    "on_delete": ConcreteModel.tenant_on_delete,
-                    "related_name": ConcreteModel.tenant_model_related_name,
-                    "related_query_name": ConcreteModel.tenant_model_related_query_name,
-                }
+                    fields = {
+                        "on_delete": ConcreteModel.tenant_on_delete,
+                        "related_name": ConcreteModel.tenant_model_related_name,
+                        "related_query_name": ConcreteModel.tenant_model_related_query_name,
+                    }
 
-                # If the model is AbstractOption, allow the ForeignKey to be blank and null.
-                #   This is because the tenant is not used for MANDATORY or OPTIONAL Options
-                #   but is needed for CUSTOM Options and is required for all Selections.
-                if base.__name__ == "AbstractOption":
-                    fields["blank"] = True
-                    fields["null"] = True
+                    # If the model is AbstractOption, allow the ForeignKey to be blank and null.
+                    #   This is because the tenant is not used for MANDATORY or OPTIONAL Options
+                    #   but is needed for CUSTOM Options and is required for all Selections.
+                    if base.__name__ == "AbstractOption":
+                        fields["blank"] = True
+                        fields["null"] = True
 
-                ConcreteModel.add_to_class(
-                    "tenant", model_config.foreignkey_class(ConcreteModel.tenant_model, **fields)
-                )
+                    ConcreteModel.add_to_class(
+                        "tenant", model_config.foreignkey_class(ConcreteModel.tenant_model, **fields)
+                    )
 
+                    # Validate the tenant field after it's been added
+                    logger.debug("Validating tenant field after adding it to %s", name)
+                    validate_model_relationship(ConcreteModel, "tenant", model_config.foreignkey_class)
+
+        except Exception as e:
+            logger.exception("Error creating model %s in TenantOptionsCoreModelBase: %s", name, e)
+            raise
         return model
 
 
@@ -133,28 +217,38 @@ class OptionModelBase(TenantOptionsCoreModelBase):
 
     def __new__(cls, name, bases, attrs, **kwargs):
         """Add ManyToManyField to the model class."""
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
+        model = None
 
-        for base in bases:
-            if base.__name__ == "AbstractOption":
-                ConcreteOptionModel = model  # pylint: disable=C0103
+        try:
+            model = super().__new__(cls, name, bases, attrs, **kwargs)
+            for base in bases:
+                if base.__name__ == "AbstractOption":
+                    ConcreteOptionModel = model  # pylint: disable=C0103
 
-                validate_model_has_attribute(ConcreteOptionModel, "tenant_model")
-                validate_model_has_attribute(ConcreteOptionModel, "selection_model")
+                    validate_model_has_attribute(ConcreteOptionModel, "tenant_model")
+                    validate_model_has_attribute(ConcreteOptionModel, "selection_model")
 
-                validate_model_is_concrete(ConcreteOptionModel)
+                    validate_model_relationship(ConcreteOptionModel, "selection_model", str)
 
-                ConcreteOptionModel.add_to_class(
-                    "associated_tenants",
-                    models.ManyToManyField(
-                        ConcreteOptionModel.tenant_model,
-                        through=ConcreteOptionModel.selection_model,
-                        through_fields=("option", "tenant"),
-                        related_name=ConcreteOptionModel.associated_tenants_related_name,  # "selected"
-                        related_query_name=ConcreteOptionModel.associated_tenants_related_query_name,
-                    ),
-                )
+                    validate_model_is_concrete(ConcreteOptionModel)
 
+                    ConcreteOptionModel.add_to_class(
+                        "associated_tenants",
+                        models.ManyToManyField(
+                            ConcreteOptionModel.tenant_model,
+                            through=ConcreteOptionModel.selection_model,
+                            through_fields=("option", "tenant"),
+                            related_name=ConcreteOptionModel.associated_tenants_related_name,  # "selected"
+                            related_query_name=ConcreteOptionModel.associated_tenants_related_query_name,
+                        ),
+                    )
+
+                    logger.debug("Validating associated_tenants field after adding it to %s", name)
+                    validate_model_relationship(ConcreteOptionModel, "associated_tenants", models.ManyToManyField)
+
+        except Exception as e:
+            logger.exception("Error creating model %s in OptionModelBase: %s", name, e)
+            raise
         return model
 
 
@@ -180,29 +274,40 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
 
     def __new__(cls, name, bases, attrs, **kwargs):
         """Adds ForeignKey to the model class."""
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
+        model = None
 
-        for base in bases:
-            if base.__name__ == "AbstractSelection":
-                ConcreteSelectionModel = model  # pylint: disable=C0103
+        try:
+            model = super().__new__(cls, name, bases, attrs, **kwargs)
+            for base in bases:
+                if base.__name__ == "AbstractSelection":
+                    ConcreteSelectionModel = model  # pylint: disable=C0103
 
-                validate_model_has_attribute(ConcreteSelectionModel, "option_model")
-                validate_model_has_attribute(ConcreteSelectionModel, "option_on_delete")
+                    validate_model_has_attribute(ConcreteSelectionModel, "option_model")
+                    validate_model_has_attribute(ConcreteSelectionModel, "option_on_delete")
 
-                validate_model_is_concrete(ConcreteSelectionModel)
+                    validate_model_relationship(ConcreteSelectionModel, "option_model", str)
+                    validate_model_relationship(ConcreteSelectionModel, "option_on_delete", models.Field)
 
-                ConcreteSelectionModel.add_to_class(
-                    "option",
-                    model_config.foreignkey_class(
-                        ConcreteSelectionModel.option_model,
-                        on_delete=ConcreteSelectionModel.option_on_delete,
-                        related_name=ConcreteSelectionModel.option_model_related_name,
-                        related_query_name=ConcreteSelectionModel.option_model_related_query_name,
-                        blank=True,
-                        null=True,
-                    ),
-                )
+                    validate_model_is_concrete(ConcreteSelectionModel)
 
+                    ConcreteSelectionModel.add_to_class(
+                        "option",
+                        model_config.foreignkey_class(
+                            ConcreteSelectionModel.option_model,
+                            on_delete=ConcreteSelectionModel.option_on_delete,
+                            related_name=ConcreteSelectionModel.option_model_related_name,
+                            related_query_name=ConcreteSelectionModel.option_model_related_query_name,
+                            blank=True,
+                            null=True,
+                        ),
+                    )
+
+                    logger.debug("Validating option field after adding it to %s", name)
+                    validate_model_relationship(ConcreteSelectionModel, "option", model_config.foreignkey_class)
+
+        except Exception as e:
+            logger.exception("Error creating model %s in SelectionModelBase: %s", name, e)
+            raise
         return model
 
 
@@ -257,7 +362,7 @@ class OptionQuerySet(model_config.queryset_class):
         logger.debug("Called selected_options_for_tenant in OptionQuerySet with %s, %s", tenant, include_deleted)
 
         try:
-            SelectionModel = self.model.associated_tenants.through
+            SelectionModel = self.model.associated_tenants.through  # pylint: disable=C0103
             selections = SelectionModel.objects.active().filter(tenant=tenant).values_list("option", flat=True)
 
             base_query = Q(option_type=OptionType.MANDATORY) | (
@@ -297,7 +402,36 @@ class OptionManager(model_config.manager_class):
 
     def create_for_tenant(self, tenant, name: str):
         """Provided a tenant and a option name, creates the new option for that tenant."""
-        return self.create(tenant=tenant, name=name, option_type=OptionType.CUSTOM)
+        try:
+            logger.debug(
+                "Creating custom option for tenant: %s", {"tenant_id": getattr(tenant, "id", None), "name": name}
+            )
+
+            # Validate tenant exists
+            if not tenant:
+                raise ValueError("Tenant must be provided when creating a custom option")
+
+            # Check for name conflicts
+            if self.filter(name=name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL]).exists():
+                raise ValidationError(
+                    f'Cannot create custom option with name "{name}" as it conflicts with an existing default option'
+                )
+
+            option = self.create(tenant=tenant, name=name, option_type=OptionType.CUSTOM)
+
+            logger.info(
+                "Successfully created custom option: %s",
+                {"id": option.id, "name": name, "tenant_id": getattr(tenant, "id", None)},
+            )
+
+            return option
+
+        except Exception as e:
+            logger.error(
+                "Error creating custom option: %s",
+                {"tenant_id": getattr(tenant, "id", None), "name": name, "error": str(e)},
+            )
+            raise
 
     def create_mandatory(self, name: str):
         """Provided an option name, creates the new option (mandatorily selected for all tenants)."""
@@ -368,7 +502,7 @@ class OptionManager(model_config.manager_class):
             try:
                 self.model.objects._update_or_create_default_option(name, options_dict)
                 updated_options[name] = options_dict
-            except Exception as e:
+            except Exception as e:  # pylint: disable=W0718
                 logger.error("Error updating option %s: %s", name, e)
 
         # Soft delete options no longer in defaults
@@ -471,17 +605,34 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             keep_parents: Whether to keep parent models
             override: If True, perform a hard delete. Otherwise, perform a soft delete.
         """
-        if override:
-            # Update related selections
-            selection_model_class = apps.get_model(self.selection_model)
-            selection_model_class.objects.filter(option=self).update(deleted=timezone.now())
-            # Hard delete
-            result = super().delete(using=using, keep_parents=keep_parents)
-            return result
+        try:
+            logger.debug("Attempting to delete option: %s", {"id": self.id, "name": self.name, "override": override})
 
-        # Soft delete
-        self.deleted = timezone.now()
-        self.save()
+            if override:
+                # Update related selections
+                selection_model_class = apps.get_model(self.selection_model)
+                selections_count = selection_model_class.objects.filter(option=self).count()
+                logger.info(
+                    "Updating related selections before hard delete: %s",
+                    {"option_id": self.id, "selections_count": selections_count},
+                )
+
+                selection_model_class.objects.filter(option=self).update(deleted=timezone.now())
+                result = super().delete(using=using, keep_parents=keep_parents)
+                logger.info(
+                    "Hard deleted option and updated selections: %s",
+                    {"option_id": self.id, "deleted_count": result[0] if result else 0},
+                )
+                return result
+
+            # Soft delete
+            self.deleted = timezone.now()
+            self.save()
+            logger.info("Soft deleted option: %s", {"id": self.id, "name": self.name})
+
+        except Exception as e:
+            logger.error("Error deleting option: %s", {"id": self.id, "name": self.name, "error": str(e)})
+            raise
 
     def __str__(self):
         """Return the name of the option."""
@@ -530,23 +681,58 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
 
         return errors
 
+    def validate_option_tenant_relationship(self):
+        """Validate option type and tenant relationship"""
+        if self.option_type == OptionType.CUSTOM and not self.tenant_id:
+            raise ValidationError("Custom options must have a tenant")
+        elif self.option_type in [OptionType.MANDATORY, OptionType.OPTIONAL] and self.tenant_id:
+            raise ValidationError("Default options cannot have a tenant")
+
     def clean(self):
         """Ensure no tenant can have the same name as a MANDATORY or OPTIONAL option."""
-        if self.option_type == OptionType.CUSTOM:
-            conflicting_options = type(self).objects.filter(
-                name=self.name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL]
-            )
-            if conflicting_options.exists():
-                raise ValidationError(
-                    {"name": _("A custom option cannot have the same name as a mandatory or optional option.")}
-                )
+        try:
+            self.validate_option_tenant_relationship()
 
-        super().clean()
+            # Check for name conflicts
+            if self.option_type == OptionType.CUSTOM:
+                existing = (
+                    type(self)
+                    .objects.filter(name__iexact=self.name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL])
+                    .exists()
+                )
+                if existing:
+                    raise ValidationError(
+                        f'Cannot create custom option with name "{self.name}" as it conflicts with an existing default option'
+                    )
+
+            super().clean()
+
+            if self.option_type in [OptionType.MANDATORY, OptionType.OPTIONAL] and self.tenant_id:
+                raise ValidationError("Default options cannot have a tenant")
+            if self.option_type == OptionType.CUSTOM and not self.tenant_id:
+                raise ValidationError("Custom options must have a tenant")
+        except ValidationError as e:
+            logger.error("Option validation failed: %s\nOption: %s", str(e), self.__dict__)
+            raise
 
     def save(self, *args, **kwargs):
         """Ensure that the option is valid before saving."""
-        self.clean()
-        super().save(*args, **kwargs)
+        try:
+            logger.debug(
+                "Validating option before save: %s",
+                {"name": self.name, "option_type": self.option_type, "tenant_id": getattr(self.tenant, "id", None)},
+            )
+            self.clean()
+            super().save(*args, **kwargs)
+            logger.info(
+                "Successfully saved option: %s", {"id": self.id, "name": self.name, "option_type": self.option_type}
+            )
+        except ValidationError as e:
+            logger.error(
+                "Validation error saving option: %s",
+                {"name": self.name, "option_type": self.option_type, "error": str(e)},
+            )
+            raise
 
 
 class SelectionQuerySet(model_config.queryset_class):
@@ -659,28 +845,82 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
         verbose_name = _("Selection")
         verbose_name_plural = _("Selections")
         constraints = [
-            UniqueConstraint(
-                "tenant",
-                "option",
-                name="%(app_label)s_%(class)s_name_val",
+            # Prevent selections with invalid option references
+            models.CheckConstraint(check=~Q(option_id__isnull=True), name="%(app_label)s_%(class)s_option_not_null"),
+            # Prevent selections with invalid tenant references
+            models.CheckConstraint(check=~Q(tenant_id__isnull=True), name="%(app_label)s_%(class)s_tenant_not_null"),
+            # Prevent duplicate selections
+            models.UniqueConstraint(
+                fields=["tenant", "option"],
+                condition=Q(deleted__isnull=True),
+                name="%(app_label)s_%(class)s_unique_active_selection",
             ),
         ]
         abstract = True
 
     def clean(self):
         """Ensure that the selected option is available to the tenant."""
-        if self.option.tenant and self.option.tenant != self.tenant:  # pylint: disable=E1101
-            raise ValueError(
-                f"The selected custom option '{self.option.name}' belongs to tenant '{self.option.tenant}', "
-                f"and is not available to tenant '{self.tenant}'."
+        try:
+            logger.debug(
+                "Validating selection: %s",
+                {"tenant_id": getattr(self.tenant, "id", None), "option_id": getattr(self.option, "id", None)},
             )
 
-        super().clean()
+            # Validate option exists
+            if not self.option_id:
+                raise ValidationError("Option must be specified")
+
+            # Validate tenant exists
+            if not self.tenant_id:
+                raise ValidationError("Tenant must be specified")
+
+            # Validate option is active
+            if getattr(self.option, "deleted", None):
+                raise ValidationError("Cannot select a deleted option")
+
+            # Check tenant ownership
+            if self.option.tenant and self.option.tenant != self.tenant:
+                raise ValidationError(
+                    f'The selected custom option "{self.option.name}" belongs to tenant "{self.option.tenant}", '
+                    f'and is not available to tenant "{self.tenant}".'
+                )
+
+            # Additional FK validation logic
+            try:
+                # Force DB hit to validate FKs exist
+                self.tenant.refresh_from_db()
+                self.option.refresh_from_db()
+            except (AttributeError, ObjectDoesNotExist) as e:
+                raise ValidationError(f"Invalid relationship: {str(e)}") from e
+
+            super().clean()
+
+            logger.debug("Selection validation passed: %s", {"tenant_id": self.tenant_id, "option_id": self.option_id})
+
+        except ValidationError as e:
+            logger.error(
+                "Selection validation failed: %s",
+                {
+                    "tenant_id": getattr(self.tenant, "id", None),
+                    "option_id": getattr(self.option, "id", None),
+                    "error": str(e),
+                },
+            )
+            raise
 
     def save(self, *args, **kwargs):
         """Ensure that the selection is valid before saving."""
-        self.clean()
-        super().save(*args, **kwargs)
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            logger.info(
+                "Successfully saved selection: tenant=%s, option=%s",
+                getattr(self.tenant, "id", None),
+                getattr(self.option, "id", None),
+            )
+        except Exception as e:
+            logger.error("Failed to save selection: %s\n%s", str(e), traceback.format_exc())
+            raise
 
     def delete(self, using=None, keep_parents=False, override=False):
         """Delete the selection, with option for hard delete.

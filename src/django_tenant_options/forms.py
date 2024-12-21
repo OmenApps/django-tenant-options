@@ -27,6 +27,7 @@ class TenantFormBaseMixin:
         self.tenant = self._pop_tenant(kwargs)
         super().__init__(*args, **kwargs)
         self._initialize_tenant_field()
+        self._initialize_option_type_field()
         self._remove_associated_tenants_field()
 
     def _pop_tenant(self, kwargs):
@@ -42,19 +43,43 @@ class TenantFormBaseMixin:
             self.fields["tenant"].initial = self.tenant
             self.fields["tenant"].widget = HiddenInput()
 
+    def _initialize_option_type_field(self):
+        """If this is an Option form, ensure option_type is CUSTOM when tenant is provided."""
+        if "option_type" in self.fields:
+            self.fields["option_type"].initial = OptionType.CUSTOM
+            if not self.data:
+                self.data = self.data.copy()
+                self.data["option_type"] = OptionType.CUSTOM
+
     def _remove_associated_tenants_field(self):
         """Remove the associated_tenants field if it exists."""
         if "associated_tenants" in self.fields:
             del self.fields["associated_tenants"]
 
     def clean(self):
-        """Ensure the tenant is correct even if HiddenField was manipulated."""
+        """Ensure the tenant is correct and set option_type to CUSTOM when tenant is provided."""
         cleaned_data = super().clean()
         cleaned_data["tenant"] = self.tenant
+
+        # If this is an Option form (has option_type field), ensure it's CUSTOM when tenant is provided
+        if "option_type" in self.fields:
+            cleaned_data["option_type"] = OptionType.CUSTOM
+
         return cleaned_data
 
 
-class OptionCreateFormMixin(TenantFormBaseMixin):  # pylint disable=R0903
+class OptionFormMixin:
+    """Base mixin for all Option forms."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "option_type" in self.fields:
+            self.fields["option_type"].initial = OptionType.CUSTOM
+            self.data = self.data.copy() if self.data else {}
+            self.data["option_type"] = OptionType.CUSTOM
+
+
+class OptionCreateFormMixin(OptionFormMixin, TenantFormBaseMixin):  # pylint disable=R0903
     """Used in forms that allow a tenant to create a new custom option.
 
     It requires a `tenant` argument to be passed from the view. This should be an instance of the model
@@ -169,8 +194,12 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
 
     def _set_selections_queryset(self):
         """Set the queryset for the `selections` field based on the tenant."""
-        self.fields["selections"].queryset = self.selection_model.objects.options_for_tenant(self.tenant)
-        self.fields["selections"].initial = self.selection_model.objects.selected_options_for_tenant(self.tenant)
+        try:
+            self.fields["selections"].queryset = self.selection_model.objects.options_for_tenant(self.tenant)
+            self.fields["selections"].initial = self.selection_model.objects.selected_options_for_tenant(self.tenant)
+        except Exception as e:  # pylint: disable=W0718
+            logger.exception("Failed setting selections queryset for tenant '%s': %s", self.tenant, e)
+            self.fields["selections"].queryset = self.selection_model.objects.none()
 
     def clean(self):
         """Ensure `selections` include mandatory options and identify removed selections."""
