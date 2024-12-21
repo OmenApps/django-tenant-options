@@ -357,10 +357,10 @@ model_config.onetoonefield_class = auto_prefetch.OneToOneField
 ```python
 DJANGO_TENANT_OPTIONS = {
     # Required: Specify your tenant model
-    "TENANT_MODEL": "myapp.Tenant",  # Default: "django_tenant_options.Tenant"
+    "TENANT_MODEL": "myapp.Tenant",  # (str)
 
     # What happens when a tenant is deleted
-    "TENANT_ON_DELETE": "models.CASCADE",  # Default: models.CASCADE
+    "TENANT_ON_DELETE": models.CASCADE,  # Default: models.CASCADE
 
     # Related name templates for tenant relationships
     "TENANT_MODEL_RELATED_NAME": "%(app_label)s_%(class)s_related",
@@ -373,7 +373,7 @@ DJANGO_TENANT_OPTIONS = {
 ```python
 DJANGO_TENANT_OPTIONS = {
     # What happens when an option is deleted
-    "OPTION_ON_DELETE": "models.CASCADE",  # Default: models.CASCADE
+    "OPTION_ON_DELETE": models.CASCADE,  # Default: models.CASCADE
 
     # Related name templates for option relationships
     "OPTION_MODEL_RELATED_NAME": "%(app_label)s_%(class)s_related",
@@ -390,7 +390,7 @@ DJANGO_TENANT_OPTIONS = {
 ```python
 DJANGO_TENANT_OPTIONS = {
     # Override database vendor detection
-    "DB_VENDOR_OVERRIDE": "postgresql",  # Options: 'postgresql', 'mysql', 'sqlite', 'oracle'
+    "DB_VENDOR_OVERRIDE": "postgresql",  # Options: "postgresql", "mysql", "sqlite", "oracle"
 }
 ```
 
@@ -399,9 +399,11 @@ This setting is useful when using custom database backends (e.g., PostGIS) while
 ### Form Configuration
 
 ```python
+from myapp.forms import CustomOptionsField
+
 DJANGO_TENANT_OPTIONS = {
     # Default form field for multiple choice fields
-    "DEFAULT_MULTIPLE_CHOICE_FIELD": "myapp.CustomOptionsField",  # Default: OptionsModelMultipleChoiceField
+    "DEFAULT_MULTIPLE_CHOICE_FIELD": CustomOptionsField,  # Default: OptionsModelMultipleChoiceField
 
     # Control behavior of deleted selections in forms
     "DISABLE_FIELD_FOR_DELETED_SELECTION": False,  # Default: False
