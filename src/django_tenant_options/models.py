@@ -3,8 +3,10 @@
 import logging
 
 from django.apps import apps
+from django.core.checks import Error
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Manager
 from django.db.models import Q
 from django.db.models.base import ModelBase
 from django.db.models.constraints import CheckConstraint
@@ -27,8 +29,31 @@ from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
 from django_tenant_options.exceptions import InvalidDefaultOptionError
 
+from .checks import check_manager_compliance
+
 
 logger = logging.getLogger("django_tenant_options")
+
+
+def get_all_managers(model):
+    """Get all managers from a model using multiple approaches."""
+    managers = set()
+
+    # Check default manager
+    if hasattr(model._meta, "default_manager"):
+        managers.add(model._meta.default_manager)
+
+    # Check _managers list
+    if hasattr(model._meta, "_managers"):
+        managers.update(model._meta._managers)
+
+    # Check direct manager attributes
+    for attr_name in dir(model):
+        attr = getattr(model, attr_name)
+        if isinstance(attr, Manager) and attr.__class__ != Manager:
+            managers.add(attr)
+
+    return managers
 
 
 def validate_model_is_concrete(model):
@@ -471,6 +496,37 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
                 result.append(model)
         return result
 
+    @classmethod
+    def check(cls, **kwargs):
+        """Check that the model has at least one manager that inherits from OptionManager and uses OptionQuerySet."""
+        errors = super().check(**kwargs)
+
+        if cls._meta.abstract:
+            return errors
+
+        managers = get_all_managers(cls)
+        has_valid_manager = False
+
+        for manager in managers:
+            results = check_manager_compliance(cls, manager, OptionManager, OptionQuerySet, ("001", "002"))
+            errors.extend(results)
+
+            # Check if this manager is fully compliant
+            if not any(isinstance(r, Error) for r in results):
+                has_valid_manager = True
+
+        if not has_valid_manager:
+            errors.append(
+                Error(
+                    f"Model {cls.__name__} must have at least one manager that inherits from OptionManager "
+                    "and uses OptionQuerySet",
+                    obj=cls,
+                    id="django_tenant_options.E003",
+                )
+            )
+
+        return errors
+
     def clean(self):
         """Ensure no tenant can have the same name as a MANDATORY or OPTIONAL option."""
         if self.option_type == OptionType.CUSTOM:
@@ -648,3 +704,34 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
             if issubclass(model, cls) and model is not cls and not model._meta.abstract:  # pylint: disable=W0212
                 result.append(model)
         return result
+
+    @classmethod
+    def check(cls, **kwargs):
+        """Check that model has at least one manager that inherits from SelectionManager and uses SelectionQuerySet."""
+        errors = super().check(**kwargs)
+
+        if cls._meta.abstract:
+            return errors
+
+        managers = get_all_managers(cls)
+        has_valid_manager = False
+
+        for manager in managers:
+            results = check_manager_compliance(cls, manager, SelectionManager, SelectionQuerySet, ("004", "005"))
+            errors.extend(results)
+
+            # Check if this manager is fully compliant
+            if not any(isinstance(r, Error) for r in results):
+                has_valid_manager = True
+
+        if not has_valid_manager:
+            errors.append(
+                Error(
+                    f"Model {cls.__name__} must have at least one manager that inherits from SelectionManager "
+                    "and uses SelectionQuerySet",
+                    obj=cls,
+                    id="django_tenant_options.E006",
+                )
+            )
+
+        return errors
