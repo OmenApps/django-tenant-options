@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-r88%=*g)x(&-&67duelz$=8mat90+aq^wo+6niu!rd2v4(#f#t
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["0.0.0.0", "127.0.0.1"]  # nosec
+ALLOWED_HOSTS = ["*"]  # nosec
 
 # Application definition
 
