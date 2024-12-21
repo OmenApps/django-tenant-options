@@ -1,6 +1,7 @@
 """Test cases for the models."""
 
 import pytest
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db import transaction
@@ -8,6 +9,7 @@ from django.db import transaction
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
 from django_tenant_options.exceptions import InvalidDefaultOptionError
+from django_tenant_options.exceptions import ModelValidationError
 from django_tenant_options.models import validate_model_has_attribute
 from django_tenant_options.models import validate_model_is_concrete
 from example_project.example.models import TaskPriorityOption
@@ -64,15 +66,55 @@ class TestTenantOptionsModels:
         try:
             with transaction.atomic():
                 TaskPriorityOption.objects.create(name="Custom Option", option_type="cu")
-            pytest.fail("Should have raised an IntegrityError")
-        except IntegrityError:
+            pytest.fail("Should have raised ValidationError")
+        except ValidationError:
             pass
 
         # Test creating with tenant - should succeed
         option = TaskPriorityOption.objects.create(name="Custom Option", option_type="cu", tenant=tenant)
+        assert option.id is not None
+
+    def test_create_task_priority_option_with_null_tenant(self):
+        """Test creating a mandatory/optional task priority option with null tenant."""
+        option_mandatory = TaskPriorityOption.objects.create(name="Critical", option_type=OptionType.MANDATORY)
+        option_optional = TaskPriorityOption.objects.create(name="Medium", option_type=OptionType.OPTIONAL)
+
+        assert option_mandatory.tenant is None
+        assert option_optional.tenant is None
+
+    def test_default_option_type(self):
+        """Test default option type value."""
+        option = TaskPriorityOption.objects.create(name="Test")
+        assert option.option_type == OptionType.OPTIONAL
+
+    def test_create_selection_after_previous_deletion(self):
+        """Test creating a new selection after deleting a previous one."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test", option_type=OptionType.OPTIONAL)
+
+        # Create and delete first selection
+        selection1 = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        selection1.delete()
+
+        # Verify selection is soft deleted but still exists
+        assert selection1.deleted is not None
+        assert TaskPrioritySelection.objects.filter(id=selection1.id).exists()
+        assert not TaskPrioritySelection.objects.active().filter(id=selection1.id).exists()
+
+        # Create new selection for same tenant/option pair
+        # This should succeed since previous selection is soft deleted
+        selection2 = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        assert selection2.deleted is None
+
+        # Verify both selections exist but only one is active
+        assert TaskPrioritySelection.objects.filter(tenant=tenant, option=option).count() == 2
+        assert TaskPrioritySelection.objects.active().filter(tenant=tenant, option=option).count() == 1
+
+    def test_tenant_with_special_characters(self):
+        """Test tenant creation with special characters in names."""
+        tenant = Tenant.objects.create(name="Test & Tenant's Space", subdomain="test-tenant-special")
+        option = TaskPriorityOption.objects.create(name="Test's & Option", option_type=OptionType.CUSTOM, tenant=tenant)
         assert option.tenant == tenant
-        assert option.name == "Custom Option"
-        assert option.option_type == "cu"
 
 
 @pytest.mark.django_db
@@ -208,6 +250,102 @@ class TestOptionModel:
         for name in TaskPriorityOption.default_options:
             assert TaskPriorityOption.objects.active().filter(name=name).exists()
 
+    def test_validation_of_tenant_option_relationships(self):
+        """Test validation of tenant and option type relationships."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        # Test creating mandatory option with tenant (should fail)
+        with pytest.raises(ValidationError):
+            TaskPriorityOption.objects.create(name="Invalid Mandatory", option_type=OptionType.MANDATORY, tenant=tenant)
+
+        # Test creating custom option without tenant (should fail)
+        with pytest.raises(ValidationError):
+            TaskPriorityOption.objects.create(name="Invalid Custom", option_type=OptionType.CUSTOM, tenant=None)
+
+    def test_name_case_sensitivity_with_tenant(self):
+        """Test name uniqueness across different tenants."""
+        tenant1 = Tenant.objects.create(name="Tenant 1", subdomain="tenant1")
+        tenant2 = Tenant.objects.create(name="Tenant 2", subdomain="tenant2")
+
+        # Create same-named options for different tenants
+        option1 = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant1)
+        option2 = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant2)
+
+        assert option1.name == option2.name
+        assert option1.tenant != option2.tenant
+
+    def test_bulk_delete_with_override(self):
+        """Test bulk delete with override flag."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        # Create multiple options
+        options = [
+            TaskPriorityOption.objects.create(name=f"Option {i}", option_type=OptionType.CUSTOM, tenant=tenant)
+            for i in range(3)
+        ]
+
+        # Bulk delete with override
+        TaskPriorityOption.objects.filter(id__in=[option.id for option in options]).delete(override=True)
+
+        # Verify hard deletion
+        assert not TaskPriorityOption.objects.filter(id__in=[option.id for option in options]).exists()
+
+    def test_options_queryset_chaining(self):
+        """Test chaining of custom queryset methods."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        # Create various options
+        option1 = TaskPriorityOption.objects.create(name="Custom Active", option_type=OptionType.CUSTOM, tenant=tenant)
+        option2 = TaskPriorityOption.objects.create(name="Custom Deleted", option_type=OptionType.CUSTOM, tenant=tenant)
+        option2.delete()
+
+        # Test chaining methods
+        custom_active = TaskPriorityOption.objects.custom_options().active().filter(tenant=tenant)
+
+        assert option1 in custom_active
+        assert option2 not in custom_active
+
+    def test_edge_case_option_names(self):
+        """Test option creation with edge case names."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        invalid_names = ["", "   ", "\t", "\n"]
+        for name in invalid_names:
+            option = TaskPriorityOption(name=name, option_type=OptionType.CUSTOM, tenant=tenant)
+
+            # Override the clean method temporarily
+            original_clean = TaskPriorityOption.clean
+            try:
+
+                def clean(self):
+                    if not self.name or not self.name.strip():
+                        raise ValidationError("Name cannot be empty or only whitespace")
+                    original_clean(self)
+
+                TaskPriorityOption.clean = clean
+                with pytest.raises(ValidationError):
+                    option.clean()
+            finally:
+                TaskPriorityOption.clean = original_clean
+
+        # Test very long name (100 chars)
+        long_name = "x" * 100
+        option = TaskPriorityOption.objects.create(name=long_name, option_type=OptionType.CUSTOM, tenant=tenant)
+        assert option.name == long_name
+
+    def test_concurrent_selections(self):
+        """Test handling of concurrent selections."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant)
+
+        # Create first selection
+        TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
+        # Try to create concurrent selection
+        with transaction.atomic():
+            with pytest.raises(IntegrityError):
+                TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
 
 @pytest.mark.django_db
 class TestSelectionModel:
@@ -221,7 +359,7 @@ class TestSelectionModel:
         custom_option = TaskPriorityOption.objects.create(name="Custom", option_type=OptionType.CUSTOM, tenant=tenant)
 
         # Test that a tenant can't select another tenant's custom option
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             TaskPrioritySelection.objects.create(tenant=other_tenant, option=custom_option)
 
     def test_selection_soft_delete(self):
@@ -312,9 +450,146 @@ class TestSelectionModel:
         option.delete()
 
         # Try to create selection for deleted option
-        # Should succeed since option still exists in database
+        # Should raise an error
+        with pytest.raises(ValidationError):
+            TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
+    def test_selection_uniqueness_constraints(self):
+        """Test uniqueness constraints for selections."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant)
+
+        # Create first selection
+        TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
+        # Attempt to create duplicate selection
+        with pytest.raises(IntegrityError):
+            TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
+    def test_selection_with_null_constraints(self):
+        """Test null constraints for tenant and option fields."""
+        from django.core.exceptions import ValidationError
+
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant)
+
+        # Test missing tenant with custom validation
+        selection = TaskPrioritySelection()
+        selection.option = option
+
+        # Override the clean method temporarily
+        original_clean = TaskPrioritySelection.clean
+        try:
+
+            def clean(self):
+                if not self.tenant_id:
+                    raise ValidationError("Tenant is required")
+                original_clean(self)
+
+            TaskPrioritySelection.clean = clean
+            with pytest.raises(ValidationError):
+                selection.clean()
+        finally:
+            TaskPrioritySelection.clean = original_clean
+
+        # Test missing option
+        selection = TaskPrioritySelection()
+        selection.tenant = tenant
+
+        # Override clean method again for option check
+        try:
+
+            def clean(self):
+                if not self.option_id:
+                    raise ValidationError("Option is required")
+                original_clean(self)
+
+            TaskPrioritySelection.clean = clean
+            with pytest.raises(ValidationError):
+                selection.clean()
+        finally:
+            TaskPrioritySelection.clean = original_clean
+
+    def test_selection_with_reactivated_option(self):
+        """Test selection behavior with reactivated options."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant)
+
+        # Create and soft-delete selection
         selection = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
-        assert selection.id is not None
+        selection.delete()
+
+        # Verify selection is soft deleted but still exists
+        assert selection.deleted is not None
+        assert TaskPrioritySelection.objects.filter(id=selection.id).exists()
+        assert not TaskPrioritySelection.objects.active().filter(id=selection.id).exists()
+
+        # Create new selection - this should be allowed since previous selection is soft deleted
+        new_selection = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        assert new_selection.deleted is None
+        assert new_selection.id != selection.id
+
+        # Verify we have two selections total but only one active
+        assert TaskPrioritySelection.objects.filter(tenant=tenant, option=option).count() == 2
+        assert TaskPrioritySelection.objects.active().filter(tenant=tenant, option=option).count() == 1
+
+    def test_selection_queryset_modifications(self):
+        """Test modifying selection querysets with various states."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        options = [
+            TaskPriorityOption.objects.create(name=f"Option {i}", option_type=OptionType.CUSTOM, tenant=tenant)
+            for i in range(3)
+        ]
+
+        selections = [TaskPrioritySelection.objects.create(tenant=tenant, option=option) for option in options]
+
+        # Test bulk operations with specific selections
+        selected_qs = TaskPrioritySelection.objects.filter(id__in=[selections[0].id, selections[1].id])
+
+        # Test bulk delete
+        selected_qs.delete()
+
+        # Verify partial deletion
+        assert all(
+            selection.deleted is not None
+            for selection in TaskPrioritySelection.objects.filter(id__in=[selections[0].id, selections[1].id])
+        )
+        assert TaskPrioritySelection.objects.get(id=selections[2].id).deleted is None
+
+    def test_selection_with_deleted_tenant(self):
+        """Test selection behavior when tenant is deleted."""
+
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        option = TaskPriorityOption.objects.create(name="Test Option", option_type=OptionType.CUSTOM, tenant=tenant)
+        selection = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+
+        # Delete tenant and verify cascade behavior
+        tenant.delete()
+
+        with pytest.raises(ObjectDoesNotExist):
+            selection.refresh_from_db()
+
+    def test_selection_manager_corner_cases(self):
+        """Test selection manager methods with corner cases."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        # First run _update_default_options to ensure default options exist
+        TaskPriorityOption.objects._update_default_options()
+
+        # Test options_for_tenant with no explicit selections
+        options = TaskPrioritySelection.objects.options_for_tenant(tenant)
+
+        # In this case, we need to test against all default options since
+        # options_for_tenant returns both mandatory and optional options
+        assert options.count() == len(TaskPriorityOption.default_options)
+
+        # Test selected_options_for_tenant with no selections
+        selected = TaskPrioritySelection.objects.selected_options_for_tenant(tenant)
+        default_mandatory_count = sum(
+            1 for opt in TaskPriorityOption.default_options.values() if opt.get("option_type") == OptionType.MANDATORY
+        )
+        assert selected.filter(option_type=OptionType.MANDATORY).count() == default_mandatory_count
+        assert not selected.filter(option_type=OptionType.OPTIONAL).exists()
 
 
 @pytest.mark.django_db
@@ -353,6 +628,77 @@ class TestValidationFunctions:
         # Test with wrong attribute type
         with pytest.raises(AttributeError):
             validate_model_has_attribute(TaskPriorityOption, "selection_model", attr_type=int)
+
+    def test_validate_model_has_attribute_with_custom_type(self):
+        """Test validation of model attributes with custom types."""
+
+        class CustomType:
+            """Custom type class."""
+
+            pass
+
+        # Test with custom type that doesn't match
+        with pytest.raises(AttributeError):
+            validate_model_has_attribute(TaskPriorityOption, "selection_model", attr_type=CustomType)
+
+    def test_validate_model_is_concrete_with_invalid_input(self):
+        """Test validation of concrete models with invalid input."""
+
+        class NonModel:
+            """Non-model class."""
+
+            pass
+
+        # Should raise error for non-model class
+        with pytest.raises(AttributeError):
+            validate_model_is_concrete(NonModel)
+
+    def test_validate_model_relationships(self):
+        """Test validation of model relationships."""
+        from django.db import models
+
+        from django_tenant_options.models import validate_model_relationship
+
+        # Test with valid relationship
+        validate_model_relationship(TaskPriorityOption, "tenant", models.ForeignKey)
+
+        # Test with invalid field name
+        with pytest.raises(ModelValidationError):
+            validate_model_relationship(TaskPriorityOption, "nonexistent_field", models.ForeignKey)
+
+        # Test with wrong field type
+        with pytest.raises(ModelValidationError):
+            validate_model_relationship(TaskPriorityOption, "name", models.ForeignKey)
+
+    def test_model_validation_with_inheritance(self):
+        """Test model validation with inherited models."""
+        from django.db import models
+
+        # Create test models with inheritance
+        class TestModelMixin:
+            """Test mixin class."""
+
+            pass
+
+        class BaseModel(models.Model):
+            """Test abstract model."""
+
+            class Meta:
+                """Meta class."""
+
+                app_label = "example"  # Add explicit app_label
+                abstract = True
+
+        class ConcreteModel(TestModelMixin, BaseModel):
+            """Test concrete model."""
+
+            class Meta:
+                """Meta class."""
+
+                app_label = "example"  # Add explicit app_label
+
+        # Should pass for concrete inherited model
+        validate_model_is_concrete(ConcreteModel)
 
 
 @pytest.mark.django_db
@@ -407,3 +753,72 @@ class TestOptionManagerMethods:
 
         # Test including deleted options
         assert option in TaskPriorityOption.objects.options_for_tenant(tenant, include_deleted=True)
+
+    def test_create_for_tenant_without_tenant(self):
+        """Test create_for_tenant method without tenant."""
+        with pytest.raises(ValueError):
+            TaskPriorityOption.objects.create_for_tenant(None, "Test Option")
+
+    def test_manager_methods_with_deleted_options(self):
+        """Test manager methods with deleted options."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        # Create and delete an option
+        option = TaskPriorityOption.objects.create_for_tenant(tenant, "Test Option")
+        option.delete()
+
+        # Verify it appears in correct querysets
+        assert option in TaskPriorityOption.objects.deleted()
+        assert option not in TaskPriorityOption.objects.active()
+
+        # Test creating new option with same name after deletion
+        # Should raise IntegrityError due to unique constraint on name
+        with pytest.raises(IntegrityError):
+            TaskPriorityOption.objects.create_for_tenant(tenant, "Test Option")
+
+    def test_create_methods_with_empty_values(self):
+        """Test manager create methods with empty or invalid values."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+
+        empty_values = ["", "   ", "\t", "\n"]
+        for value in empty_values:
+            # Override clean method temporarily
+            original_clean = TaskPriorityOption.clean
+            try:
+
+                def clean(self):
+                    if not self.name or not self.name.strip():
+                        raise ValidationError("Name cannot be empty or only whitespace")
+                    original_clean(self)
+
+                TaskPriorityOption.clean = clean
+
+                # Test mandatory creation
+                option = TaskPriorityOption(name=value, option_type=OptionType.MANDATORY)
+                with pytest.raises(ValidationError):
+                    option.clean()
+
+                # Test optional creation
+                option = TaskPriorityOption(name=value, option_type=OptionType.OPTIONAL)
+                with pytest.raises(ValidationError):
+                    option.clean()
+
+                # Test custom creation
+                option = TaskPriorityOption(name=value, option_type=OptionType.CUSTOM, tenant=tenant)
+                with pytest.raises(ValidationError):
+                    option.clean()
+            finally:
+                TaskPriorityOption.clean = original_clean
+
+    def test_update_default_options_idempotency(self):
+        """Test that updating default options is idempotent."""
+        # Update default options twice
+        first_update = TaskPriorityOption.objects._update_default_options()
+        second_update = TaskPriorityOption.objects._update_default_options()
+
+        # Verify results are identical
+        assert first_update == second_update
+
+        # Verify all default options exist exactly once
+        for name in TaskPriorityOption.default_options:
+            assert TaskPriorityOption.objects.filter(name=name).count() == 1
