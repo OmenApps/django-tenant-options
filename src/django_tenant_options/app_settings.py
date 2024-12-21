@@ -11,6 +11,7 @@ Here is what it should look like in the settings.py file of the project:
 
 """
 
+import importlib
 import logging
 
 from django_tenant_options.form_fields import (  # noqa: F401
@@ -36,65 +37,127 @@ if import_error:
     logger.error(import_error)
 
 
+def import_string(dotted_path):
+    """Import a dotted module path and return the attribute/class designated by the last name."""
+    try:
+        module_path, class_name = dotted_path.rsplit('.', 1)
+    except ValueError as err:
+        raise ImportError(f"{dotted_path} doesn't look like a module path") from err
+
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as err:
+        raise ImportError(f"Module {module_path} does not exist") from err
+
+    try:
+        return getattr(module, class_name)
+    except AttributeError as err:
+        raise ImportError(f"Module {module_path} does not define {class_name}") from err
+
+
 class ModelClassConfig:
     """Configuration class for model base classes."""
 
     def __init__(self):
-        self._model_class = models.Model
-        self._manager_class = models.Manager
-        self._queryset_class = models.QuerySet
-        self._foreignkey_class = models.ForeignKey
-        self._onetoonefield_class = models.OneToOneField
+        self._model_class = None
+        self._manager_class = None
+        self._queryset_class = None
+        self._foreignkey_class = None
+        self._onetoonefield_class = None
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Ensure the configuration is initialized."""
+        if not self._initialized:
+            self._model_class = models.Model
+            self._manager_class = models.Manager
+            self._queryset_class = models.QuerySet
+            self._foreignkey_class = models.ForeignKey
+            self._onetoonefield_class = models.OneToOneField
+            self._initialized = True
+
+    def _import_string(self, dotted_path):
+        """Import a dotted module path and return the attribute/class designated by the last name."""
+        try:
+            module_path, class_name = dotted_path.rsplit('.', 1)
+        except ValueError as err:
+            raise ImportError(f"{dotted_path} doesn't look like a module path") from err
+
+        try:
+            module = importlib.import_module(module_path)
+        except ImportError as err:
+            raise ImportError(f"Module {module_path} does not exist") from err
+
+        try:
+            return getattr(module, class_name)
+        except AttributeError as err:
+            raise ImportError(f"Module {module_path} does not define {class_name}") from err
+
+    def _resolve_class(self, value):
+        """Resolve a class from either a string path or direct class reference."""
+        if isinstance(value, str):
+            return self._import_string(value)
+        return value
 
     @property
     def model_class(self):
         """The base class to use for all django-tenant-options models."""
+        self._ensure_initialized()
         return self._model_class
 
     @model_class.setter
-    def model_class(self, cls):
+    def model_class(self, value):
         """Set the base class to use for all django-tenant-options models."""
-        self._model_class = cls
+        self._model_class = self._resolve_class(value)
+        self._initialized = True
 
     @property
     def manager_class(self):
         """The base class to use for all django-tenant-options model managers."""
+        self._ensure_initialized()
         return self._manager_class
 
     @manager_class.setter
-    def manager_class(self, cls):
+    def manager_class(self, value):
         """Set the base class to use for all django-tenant-options model managers."""
-        self._manager_class = cls
+        self._manager_class = self._resolve_class(value)
+        self._initialized = True
 
     @property
     def queryset_class(self):
         """The base class to use for all django-tenant-options model querysets."""
+        self._ensure_initialized()
         return self._queryset_class
 
     @queryset_class.setter
-    def queryset_class(self, cls):
+    def queryset_class(self, value):
         """Set the base class to use for all django-tenant-options model querysets."""
-        self._queryset_class = cls
+        self._queryset_class = self._resolve_class(value)
+        self._initialized = True
 
     @property
     def foreignkey_class(self):
         """The base class to use for all django-tenant-options foreign keys."""
+        self._ensure_initialized()
         return self._foreignkey_class
 
     @foreignkey_class.setter
-    def foreignkey_class(self, cls):
+    def foreignkey_class(self, value):
         """Set the base class to use for all django-tenant-options foreign keys."""
-        self._foreignkey_class = cls
+        self._foreignkey_class = self._resolve_class(value)
+        self._initialized = True
 
     @property
     def onetoonefield_class(self):
         """The base class to use for all django-tenant-options one-to-one fields."""
+        self._ensure_initialized()
         return self._onetoonefield_class
 
     @onetoonefield_class.setter
-    def onetoonefield_class(self, cls):
+    def onetoonefield_class(self, value):
         """Set the base class to use for all django-tenant-options one-to-one fields."""
-        self._onetoonefield_class = cls
+        self._onetoonefield_class = self._resolve_class(value)
+        self._initialized = True
 
 
 # Global config instance for django-tenant-options models
@@ -118,6 +181,18 @@ FOREIGNKEY_CLASS = _DJANGO_TENANT_OPTIONS.get("FOREIGNKEY_CLASS", models.Foreign
 
 ONETOONEFIELD_CLASS = _DJANGO_TENANT_OPTIONS.get("ONETOONEFIELD_CLASS", models.OneToOneField)
 """The OneToOneField field class to use. Defaults to django.db.models.OneToOneField."""
+
+# Convert string references to actual classes
+if isinstance(MODEL_CLASS, str):
+    MODEL_CLASS = import_string(MODEL_CLASS)
+if isinstance(MANAGER_CLASS, str):
+    MANAGER_CLASS = import_string(MANAGER_CLASS)
+if isinstance(QUERYSET_CLASS, str):
+    QUERYSET_CLASS = import_string(QUERYSET_CLASS)
+if isinstance(FOREIGNKEY_CLASS, str):
+    FOREIGNKEY_CLASS = import_string(FOREIGNKEY_CLASS)
+if isinstance(ONETOONEFIELD_CLASS, str):
+    ONETOONEFIELD_CLASS = import_string(ONETOONEFIELD_CLASS)
 
 model_config.model_class = MODEL_CLASS
 model_config.manager_class = MANAGER_CLASS

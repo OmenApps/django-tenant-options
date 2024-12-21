@@ -319,7 +319,7 @@ Django Tenant Options allows you to customize the base classes used for models, 
 
 #### Configuration Through Settings
 
-Configure base classes globally in your Django settings:
+Configure base classes globally in your Django settings, using either the actual class or a string path:
 
 ```python
 import auto_prefetch
@@ -327,28 +327,32 @@ import auto_prefetch
 DJANGO_TENANT_OPTIONS = {
     # Base class settings
     "MODEL_CLASS": auto_prefetch.Model,  # Default: django.db.models.Model
-    "MANAGER_CLASS": auto_prefetch.Manager,  # Default: django.db.models.Manager
-    "QUERYSET_CLASS": auto_prefetch.QuerySet,  # Default: django.db.models.QuerySet
+    "MANAGER_CLASS": "auto_prefetch.Manager",  # Default: django.db.models.Manager
+    "QUERYSET_CLASS": "auto_prefetch.QuerySet",  # Default: django.db.models.QuerySet
     "FOREIGNKEY_CLASS": auto_prefetch.ForeignKey,  # Default: django.db.models.ForeignKey
-    "ONETOONEFIELD_CLASS": auto_prefetch.OneToOneField,  # Default: django.db.models.OneToOneField
+    "ONETOONEFIELD_CLASS": "auto_prefetch.OneToOneField",  # Default: django.db.models.OneToOneField
 }
 ```
 
 #### Programmatic Configuration
 
-For more granular control, you can configure base classes programmatically:
+For more granular control, you can configure base classes programmatically. Again, we can use either the actual class or a string path:
 
 ```python
 from django_tenant_options.app_settings import model_config
 import auto_prefetch
 
 # Configure base classes
-model_config.model_class = auto_prefetch.Model
+model_config.model_class = "auto_prefetch.Model"
 model_config.manager_class = auto_prefetch.Manager
 model_config.queryset_class = auto_prefetch.QuerySet
 model_config.foreignkey_class = auto_prefetch.ForeignKey
-model_config.onetoonefield_class = auto_prefetch.OneToOneField
+model_config.onetoonefield_class = "auto_prefetch.OneToOneField"
 ```
+
+> 🟩 Note
+>
+> In your project's models, you may need to set the Meta class's metaclass. You can do this like so (using auto_prefetch as the example here) `class Meta(AbstractOption.Meta, auto_prefetch.Model.Meta):`.
 
 ### Model Configuration
 
