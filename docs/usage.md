@@ -42,6 +42,8 @@ DJANGO_TENANT_OPTIONS = {
 }
 ```
 
+See the [Configuration Guide](https://django-tenant-options.readthedocs.io/en/latest/usage.html#configuration-guide) for more details on available settings.
+
 ## Core Concepts
 
 ### Option Types
@@ -66,6 +68,10 @@ django-tenant-options provides three types of options:
    - Example: Tenant-specific categories or statuses
 
 ## Model Configuration
+
+> ⚠️ Warning
+>
+> The package automatically adds an `objects` Manager and associated QuerySet to each option and selection model. If you define a custom Manager or QuerySet, ensure it inherits from `OptionManager` or `OptionQuerySet`, or your optyions and selections will not work as intended. Also, an additional `unscoped` Manager is available for querying all options, including soft-deleted ones.
 
 ### 1. Option Models
 
@@ -294,11 +300,119 @@ python manage.py maketriggers --force
 python manage.py maketriggers --dry-run --verbose
 ```
 
-## Advanced Configuration
+## Configuration Guide
 
-### 1. Custom Form Fields
+### Basic Configuration
 
-You can customize how options are displayed in forms:
+Django Tenant Options can be configured through your Django settings. Add a `DJANGO_TENANT_OPTIONS` dictionary to your settings:
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    "TENANT_MODEL": "myapp.Tenant",
+    # ... other settings
+}
+```
+
+### Base Model Classes
+
+Django Tenant Options allows you to customize the base classes used for models, managers, querysets and field types. This is particularly useful when integrating with packages like django-auto-prefetch or implementing custom behavior across all tenant option models.
+
+#### Configuration Through Settings
+
+Configure base classes globally in your Django settings:
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # Base class settings
+    "MODEL_CLASS": "auto_prefetch.Model",  # Default: django.db.models.Model
+    "MANAGER_CLASS": "auto_prefetch.Manager",  # Default: django.db.models.Manager
+    "QUERYSET_CLASS": "auto_prefetch.QuerySet",  # Default: django.db.models.QuerySet
+    "FOREIGNKEY_CLASS": "auto_prefetch.ForeignKey",  # Default: django.db.models.ForeignKey
+    "ONETOONEFIELD_CLASS": "auto_prefetch.OneToOneField",  # Default: django.db.models.OneToOneField
+}
+```
+
+#### Programmatic Configuration
+
+For more granular control, you can configure base classes programmatically:
+
+```python
+from django_tenant_options.app_settings import model_config
+import auto_prefetch
+
+# Configure base classes
+model_config.model_class = auto_prefetch.Model
+model_config.manager_class = auto_prefetch.Manager
+model_config.queryset_class = auto_prefetch.QuerySet
+model_config.foreignkey_class = auto_prefetch.ForeignKey
+model_config.onetoonefield_class = auto_prefetch.OneToOneField
+```
+
+### Model Configuration
+
+#### Tenant Model Settings
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # Required: Specify your tenant model
+    "TENANT_MODEL": "myapp.Tenant",  # Default: "django_tenant_options.Tenant"
+
+    # What happens when a tenant is deleted
+    "TENANT_ON_DELETE": "models.CASCADE",  # Default: models.CASCADE
+
+    # Related name templates for tenant relationships
+    "TENANT_MODEL_RELATED_NAME": "%(app_label)s_%(class)s_related",
+    "TENANT_MODEL_RELATED_QUERY_NAME": "%(app_label)s_%(class)ss",
+}
+```
+
+#### Option Model Settings
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # What happens when an option is deleted
+    "OPTION_ON_DELETE": "models.CASCADE",  # Default: models.CASCADE
+
+    # Related name templates for option relationships
+    "OPTION_MODEL_RELATED_NAME": "%(app_label)s_%(class)s_related",
+    "OPTION_MODEL_RELATED_QUERY_NAME": "%(app_label)s_%(class)ss",
+
+    # Templates for the many-to-many relationship between options and tenants
+    "ASSOCIATED_TENANTS_RELATED_NAME": "%(app_label)s_%(class)s_selections",
+    "ASSOCIATED_TENANTS_RELATED_QUERY_NAME": "%(app_label)s_%(class)ss_selected",
+}
+```
+
+#### Database Configuration
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # Override database vendor detection
+    "DB_VENDOR_OVERRIDE": "postgresql",  # Options: 'postgresql', 'mysql', 'sqlite', 'oracle'
+}
+```
+
+This setting is useful when using custom database backends (e.g., PostGIS) while the underlying database is a supported vendor.
+
+### Form Configuration
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # Default form field for multiple choice fields
+    "DEFAULT_MULTIPLE_CHOICE_FIELD": "myapp.CustomOptionsField",  # Default: OptionsModelMultipleChoiceField
+
+    # Control behavior of deleted selections in forms
+    "DISABLE_FIELD_FOR_DELETED_SELECTION": False,  # Default: False
+}
+```
+
+When `DISABLE_FIELD_FOR_DELETED_SELECTION` is True, deleted selections appear disabled in forms rather than requiring selection of a new option.
+
+## Extending Models and Queries
+
+### Custom Form Fields
+
+You can customize how options are displayed in forms by subclassing `OptionsModelMultipleChoiceField`:
 
 ```python
 from django_tenant_options.form_fields import OptionsModelMultipleChoiceField
@@ -306,30 +420,26 @@ from django_tenant_options.form_fields import OptionsModelMultipleChoiceField
 class CustomOptionsField(OptionsModelMultipleChoiceField):
     def label_from_instance(self, obj):
         return f"{obj.name} - {obj.get_option_type_display()}"
-
-DJANGO_TENANT_OPTIONS = {
-    "DEFAULT_MULTIPLE_CHOICE_FIELD": CustomOptionsField,
-}
 ```
 
-### 2. Custom Managers and QuerySets
+### Extending QuerySets and Managers
 
-Extend the default managers and querysets for additional functionality:
+Add custom functionality by subclassing the base querysets and managers:
 
 ```python
 from django_tenant_options.models import OptionQuerySet, OptionManager
 
 class CustomOptionQuerySet(OptionQuerySet):
-    def active_mandatory(self):
-        return self.active().filter(option_type="dm")
+    def active_priority(self):
+        return self.active().filter(priority__gt=0)
 
 class CustomOptionManager(OptionManager):
     def get_queryset(self):
         return CustomOptionQuerySet(self.model, using=self._db)
 
-class TaskPriorityOption(AbstractOption):
+class PriorityOption(AbstractOption):
     objects = CustomOptionManager()
-    # ... rest of the model definition
+    priority = models.IntegerField(default=0)
 ```
 
 ### Performance Optimization
