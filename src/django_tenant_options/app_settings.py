@@ -10,30 +10,120 @@ Here is what it should look like in the settings.py file of the project:
     }
 
 """
+
 import logging
-
-from django.core.exceptions import ImproperlyConfigured
-
-
-logger = logging.getLogger(__name__)
-
-try:
-    from django.conf import settings
-except ImproperlyConfigured as e:
-    logger.error("Settings could not be imported: %s", e)
-    settings = None  # pylint: disable=C0103
-except ImportError as e:
-    logger.error("Django could not be imported. Settings cannot be loaded: %s", e)
-    settings = None  # pylint: disable=C0103
-from django.db import models
 
 from django_tenant_options.form_fields import (  # noqa: F401
     OptionsModelMultipleChoiceField,
 )
 
 
+try:
+    import_error = None
+    from django.conf import settings
+    from django.core.exceptions import ImproperlyConfigured
+    from django.db import models
+except ImproperlyConfigured as e:
+    import_error = "Settings could not be imported: %s", e
+    settings = None  # pylint: disable=C0103
+except ImportError as e:
+    import_error = "Django could not be imported. Settings cannot be loaded: %s", e
+    settings = None  # pylint: disable=C0103
+
+logger = logging.getLogger(__name__)
+
+if import_error:
+    logger.error(import_error)
+
+
+class ModelClassConfig:
+    """Configuration class for model base classes."""
+
+    def __init__(self):
+        self._model_class = models.Model
+        self._manager_class = models.Manager
+        self._queryset_class = models.QuerySet
+        self._foreignkey_class = models.ForeignKey
+        self._onetoonefield_class = models.OneToOneField
+
+    @property
+    def model_class(self):
+        """The base class to use for all django-tenant-options models."""
+        return self._model_class
+
+    @model_class.setter
+    def model_class(self, cls):
+        """Set the base class to use for all django-tenant-options models."""
+        self._model_class = cls
+
+    @property
+    def manager_class(self):
+        """The base class to use for all django-tenant-options model managers."""
+        return self._manager_class
+
+    @manager_class.setter
+    def manager_class(self, cls):
+        """Set the base class to use for all django-tenant-options model managers."""
+        self._manager_class = cls
+
+    @property
+    def queryset_class(self):
+        """The base class to use for all django-tenant-options model querysets."""
+        return self._queryset_class
+
+    @queryset_class.setter
+    def queryset_class(self, cls):
+        """Set the base class to use for all django-tenant-options model querysets."""
+        self._queryset_class = cls
+
+    @property
+    def foreignkey_class(self):
+        """The base class to use for all django-tenant-options foreign keys."""
+        return self._foreignkey_class
+
+    @foreignkey_class.setter
+    def foreignkey_class(self, cls):
+        """Set the base class to use for all django-tenant-options foreign keys."""
+        self._foreignkey_class = cls
+
+    @property
+    def onetoonefield_class(self):
+        """The base class to use for all django-tenant-options one-to-one fields."""
+        return self._onetoonefield_class
+
+    @onetoonefield_class.setter
+    def onetoonefield_class(self, cls):
+        """Set the base class to use for all django-tenant-options one-to-one fields."""
+        self._onetoonefield_class = cls
+
+
+# Global config instance for django-tenant-options models
+model_config = ModelClassConfig()
+
 _DJANGO_TENANT_OPTIONS = getattr(settings, "DJANGO_TENANT_OPTIONS", {})
 """dict: The settings for the django-tenant-options app."""
+
+# Base class settings
+MODEL_CLASS = _DJANGO_TENANT_OPTIONS.get("MODEL_CLASS", models.Model)
+"""The base Model class to use. Defaults to django.db.models.Model."""
+
+MANAGER_CLASS = _DJANGO_TENANT_OPTIONS.get("MANAGER_CLASS", models.Manager)
+"""The base Manager class to use. Defaults to django.db.models.Manager."""
+
+QUERYSET_CLASS = _DJANGO_TENANT_OPTIONS.get("QUERYSET_CLASS", models.QuerySet)
+"""The base QuerySet class to use. Defaults to django.db.models.QuerySet."""
+
+FOREIGNKEY_CLASS = _DJANGO_TENANT_OPTIONS.get("FOREIGNKEY_CLASS", models.ForeignKey)
+"""The ForeignKey field class to use. Defaults to django.db.models.ForeignKey."""
+
+ONETOONEFIELD_CLASS = _DJANGO_TENANT_OPTIONS.get("ONETOONEFIELD_CLASS", models.OneToOneField)
+"""The OneToOneField field class to use. Defaults to django.db.models.OneToOneField."""
+
+model_config.model_class = MODEL_CLASS
+model_config.manager_class = MANAGER_CLASS
+model_config.queryset_class = QUERYSET_CLASS
+model_config.foreignkey_class = FOREIGNKEY_CLASS
+model_config.onetoonefield_class = ONETOONEFIELD_CLASS
 
 TENANT_MODEL = _DJANGO_TENANT_OPTIONS.get("TENANT_MODEL", "django_tenant_options.Tenant")
 """str: The model to use for the tenant."""

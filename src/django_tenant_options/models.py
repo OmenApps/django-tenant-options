@@ -25,6 +25,7 @@ from django_tenant_options.app_settings import TENANT_MODEL
 from django_tenant_options.app_settings import TENANT_MODEL_RELATED_NAME
 from django_tenant_options.app_settings import TENANT_MODEL_RELATED_QUERY_NAME
 from django_tenant_options.app_settings import TENANT_ON_DELETE
+from django_tenant_options.app_settings import model_config
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import IncorrectSubclassError
 from django_tenant_options.exceptions import InvalidDefaultOptionError
@@ -103,7 +104,9 @@ class TenantOptionsCoreModelBase(ModelBase):
                     fields["blank"] = True
                     fields["null"] = True
 
-                ConcreteModel.add_to_class("tenant", models.ForeignKey(ConcreteModel.tenant_model, **fields))
+                ConcreteModel.add_to_class(
+                    "tenant", model_config.foreignkey_class(ConcreteModel.tenant_model, **fields)
+                )
 
         return model
 
@@ -190,7 +193,7 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
 
                 ConcreteSelectionModel.add_to_class(
                     "option",
-                    models.ForeignKey(
+                    model_config.foreignkey_class(
                         ConcreteSelectionModel.option_model,
                         on_delete=ConcreteSelectionModel.option_on_delete,
                         related_name=ConcreteSelectionModel.option_model_related_name,
@@ -203,7 +206,7 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
         return model
 
 
-class OptionQuerySet(models.QuerySet):
+class OptionQuerySet(model_config.queryset_class):
     """Custom QuerySet for Option models.
 
     Subclass this QuerySet to provide additional functionality for your concrete Option model.
@@ -284,7 +287,7 @@ class OptionQuerySet(models.QuerySet):
         return self.update(deleted=timezone.now())
 
 
-class OptionManager(models.Manager):
+class OptionManager(model_config.manager_class):
     """Manager for Option models.
 
     Provides methods for creating default options and filtering out deleted options.
@@ -327,7 +330,7 @@ class OptionManager(models.Manager):
                         f"You specified {key} = {value} for {item_name=}."
                     )
 
-        obj, created = self.model.objects.update_or_create(
+        self.model.objects.update_or_create(
             name=item_name,
             option_type=option_type,
             defaults={"deleted": None},  # Undelete the option if it was previously deleted
@@ -366,7 +369,7 @@ class OptionManager(models.Manager):
                 self.model.objects._update_or_create_default_option(name, options_dict)
                 updated_options[name] = options_dict
             except Exception as e:
-                logger.error(f"Error updating option {name}: {e}")
+                logger.error("Error updating option %s: %s", name, e)
 
         # Soft delete options no longer in defaults
         existing_options = self.model.objects.filter(
@@ -402,7 +405,7 @@ def get_constraint_dict():
     }
 
 
-class AbstractOption(models.Model, metaclass=OptionModelBase):
+class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
     """Abstract model for defining all available Options.
 
     Options which are provided by default through model configuration may be Mandatory or Optional.
@@ -438,7 +441,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
     )
 
     objects = OptionManager.from_queryset(OptionQuerySet)()
-    unscoped = models.Manager()
+    unscoped = model_config.manager_class()
 
     class Meta:  # pylint: disable=R0903
         """Meta options for AbstractOption.
@@ -546,7 +549,7 @@ class AbstractOption(models.Model, metaclass=OptionModelBase):
         super().save(*args, **kwargs)
 
 
-class SelectionQuerySet(models.QuerySet):
+class SelectionQuerySet(model_config.queryset_class):
     """Custom QuerySet for Selection models.
 
     Subclass this QuerySet to provide additional functionality for your concrete Selection model.
@@ -575,7 +578,7 @@ class SelectionQuerySet(models.QuerySet):
         return self.update(deleted=timezone.now())
 
 
-class SelectionManager(models.Manager):
+class SelectionManager(model_config.manager_class):
     """Custom Manager for Selection models.
 
     Subclass this manager to provide additional functionality for your concrete Selection model.
@@ -621,7 +624,7 @@ class SelectionManager(models.Manager):
             return None
 
 
-class AbstractSelection(models.Model, metaclass=SelectionModelBase):
+class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
     """Identifies all selected Options for a given tenant, which it's users can then choose from.
 
     A single tenant can select multiple Options. This model is a through model for the ManyToManyField
@@ -645,7 +648,7 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
     )
 
     objects = SelectionManager.from_queryset(SelectionQuerySet)()
-    unscoped = models.Manager()
+    unscoped = model_config.manager_class()
 
     class Meta:  # pylint: disable=R0903
         """Meta options for AbstractSelection.
@@ -668,8 +671,8 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
         """Ensure that the selected option is available to the tenant."""
         if self.option.tenant and self.option.tenant != self.tenant:  # pylint: disable=E1101
             raise ValueError(
-                "The selected custom option '%s' belongs to tenant '%s', and is not available to tenant '%s'."
-                % (self.option.name, self.option.tenant, self.tenant)
+                f"The selected custom option '{self.option.name}' belongs to tenant '{self.option.tenant}', "
+                f"and is not available to tenant '{self.tenant}'."
             )
 
         super().clean()
@@ -689,9 +692,8 @@ class AbstractSelection(models.Model, metaclass=SelectionModelBase):
         """
         if override:
             return super().delete(using=using, keep_parents=keep_parents)
-        else:
-            self.deleted = timezone.now()
-            self.save()
+        self.deleted = timezone.now()
+        self.save()
 
     @classmethod
     def get_concrete_subclasses(cls) -> list:
