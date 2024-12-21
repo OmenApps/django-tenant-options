@@ -76,9 +76,6 @@ dev-dependencies = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-templated_email_md = ["templates/templated_email/*", "locale/*"]
-
 [tool.black]
 line-length = 120
 target-version = ["py310", "py311", "py312", "py313"]
