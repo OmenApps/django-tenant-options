@@ -501,7 +501,7 @@ wheels = [
 
 [[package]]
 name = "django-tenant-options"
-version = "2024.12.1"
+version = "2024.12.2"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
