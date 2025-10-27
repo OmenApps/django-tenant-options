@@ -64,14 +64,14 @@ def validate_model_relationship(model_class, field_name, related_model):
                     f"Invalid type for '{field_name}' on {model_class.__name__}. "
                     f"Expected string (e.g. 'app.Model'), got {type(field).__name__}"
                 )
-            if not "." in field:
+            if "." not in field:
                 raise ModelValidationError(
                     f"Invalid format for '{field_name}' on {model_class.__name__}. "
                     f"Expected 'app.Model' format, got '{field}'"
                 )
         # Special handling for on_delete fields
         elif field_name.endswith("_on_delete"):
-            if not field in [
+            if field not in [
                 models.CASCADE,
                 models.PROTECT,
                 models.SET_NULL,
