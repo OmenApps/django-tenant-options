@@ -43,9 +43,18 @@ def validate_model_relationship(model_class, field_name, related_model):
     """Validate model relationships with detailed error messages."""
     try:
         if not hasattr(model_class, field_name):
-            raise ModelValidationError(f"Missing required field '{field_name}' on {model_class.__name__}")
+            raise ModelValidationError(
+                f"Missing required field '{field_name}' on {model_class.__name__}"
+            )
 
         field = getattr(model_class, field_name)
+
+        logger.debug(
+            "Validating relationship: %s.%s (%s)",
+            model_class.__name__,
+            field_name,
+            type(field),
+        )
 
         # Special handling for model reference strings (e.g. 'app.Model')
         if field_name.endswith("_model"):
@@ -94,11 +103,18 @@ def validate_model_relationship(model_class, field_name, related_model):
                 )
 
         logger.debug(
-            "Validated relationship %s on %s (type: %s)", field_name, model_class.__name__, type(field).__name__
+            "Successfully validated relationship %s on %s (type: %s)",
+            field_name,
+            model_class.__name__,
+            type(field).__name__,
         )
 
     except Exception as e:
-        logger.error("Failed to validate model relationship: %s\n%s", str(e), traceback.format_exc())
+        logger.error(
+            "Failed to validate model relationship: %s\n%s",
+            str(e),
+            traceback.format_exc(),
+        )
         raise
 
 
@@ -190,7 +206,9 @@ class TenantOptionsCoreModelBase(ModelBase):
                     validate_model_relationship(ConcreteModel, "tenant", model_config.foreignkey_class)
 
         except Exception as e:
-            logger.exception("Error creating model %s in TenantOptionsCoreModelBase: %s", name, e)
+            logger.exception(
+                "Error creating model %s in TenantOptionsCoreModelBase: %s", name, e
+            )
             raise
         return model
 
@@ -306,7 +324,9 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
                     validate_model_relationship(ConcreteSelectionModel, "option", model_config.foreignkey_class)
 
         except Exception as e:
-            logger.exception("Error creating model %s in SelectionModelBase: %s", name, e)
+            logger.exception(
+                "Error creating model %s in SelectionModelBase: %s", name, e
+            )
             raise
         return model
 
@@ -359,7 +379,11 @@ class OptionQuerySet(model_config.queryset_class):
 
         Set `include_deleted=True` to include deleted options.
         """
-        logger.debug("Called selected_options_for_tenant in OptionQuerySet with %s, %s", tenant, include_deleted)
+        logger.debug(
+            "Called selected_options_for_tenant in OptionQuerySet with %s, %s",
+            tenant,
+            include_deleted,
+        )
 
         try:
             SelectionModel = self.model.associated_tenants.through  # pylint: disable=C0103
@@ -421,7 +445,11 @@ class OptionManager(model_config.manager_class):
 
             logger.info(
                 "Successfully created custom option: %s",
-                {"id": option.id, "name": name, "tenant_id": getattr(tenant, "id", None)},
+                {
+                    "id": option.id,
+                    "name": name,
+                    "tenant_id": getattr(tenant, "id", None),
+                },
             )
 
             return option
@@ -429,7 +457,11 @@ class OptionManager(model_config.manager_class):
         except Exception as e:
             logger.error(
                 "Error creating custom option: %s",
-                {"tenant_id": getattr(tenant, "id", None), "name": name, "error": str(e)},
+                {
+                    "tenant_id": getattr(tenant, "id", None),
+                    "name": name,
+                    "error": str(e),
+                },
             )
             raise
 
@@ -606,7 +638,10 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             override: If True, perform a hard delete. Otherwise, perform a soft delete.
         """
         try:
-            logger.debug("Attempting to delete option: %s", {"id": self.id, "name": self.name, "override": override})
+            logger.debug(
+                "Attempting to delete option: %s",
+                {"id": self.id, "name": self.name, "override": override},
+            )
 
             if override:
                 # Update related selections
@@ -631,7 +666,10 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             logger.info("Soft deleted option: %s", {"id": self.id, "name": self.name})
 
         except Exception as e:
-            logger.error("Error deleting option: %s", {"id": self.id, "name": self.name, "error": str(e)})
+            logger.error(
+                "Error deleting option: %s",
+                {"id": self.id, "name": self.name, "error": str(e)},
+            )
             raise
 
     def __str__(self):
@@ -725,7 +763,8 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             self.clean()
             super().save(*args, **kwargs)
             logger.info(
-                "Successfully saved option: %s", {"id": self.id, "name": self.name, "option_type": self.option_type}
+                "Successfully saved option: %s",
+                {"id": self.id, "name": self.name, "option_type": self.option_type},
             )
         except ValidationError as e:
             logger.error(
@@ -800,7 +839,11 @@ class SelectionManager(model_config.manager_class):
 
         Set `include_deleted=True` to include deleted options.
         """
-        logger.debug("Called selected_options_for_tenant in SelectionManager with %s, %s", tenant, include_deleted)
+        logger.debug(
+            "Called selected_options_for_tenant in SelectionManager with %s, %s",
+            tenant,
+            include_deleted,
+        )
         try:
             OptionsModel = apps.get_model(self.model.option_model)  # pylint: disable=C0103
             return OptionsModel.objects.selected_options_for_tenant(tenant=tenant, include_deleted=include_deleted)
@@ -863,7 +906,10 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
         try:
             logger.debug(
                 "Validating selection: %s",
-                {"tenant_id": getattr(self.tenant, "id", None), "option_id": getattr(self.option, "id", None)},
+                {
+                    "tenant_id": getattr(self.tenant, "id", None),
+                    "option_id": getattr(self.option, "id", None),
+                },
             )
 
             # Validate option exists
@@ -895,7 +941,10 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
 
             super().clean()
 
-            logger.debug("Selection validation passed: %s", {"tenant_id": self.tenant_id, "option_id": self.option_id})
+            logger.debug(
+                "Selection validation passed: %s",
+                {"tenant_id": self.tenant_id, "option_id": self.option_id},
+            )
 
         except ValidationError as e:
             logger.error(
@@ -919,7 +968,9 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
                 getattr(self.option, "id", None),
             )
         except Exception as e:
-            logger.error("Failed to save selection: %s\n%s", str(e), traceback.format_exc())
+            logger.error(
+                "Failed to save selection: %s\n%s", str(e), traceback.format_exc()
+            )
             raise
 
     def delete(self, using=None, keep_parents=False, override=False):
