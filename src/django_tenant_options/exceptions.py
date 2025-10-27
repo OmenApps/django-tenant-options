@@ -18,4 +18,4 @@ class InvalidDefaultOptionError(Exception):
 
 
 class ModelValidationError(Exception):
-    """Custom exception for model validation errors"""
+    """Custom exception for model validation errors."""
