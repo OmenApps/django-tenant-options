@@ -5,6 +5,7 @@ import traceback
 
 from django.apps import apps
 from django.core.checks import Error
+from django.core.checks import Warning
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -84,19 +85,26 @@ def validate_model_relationship(model_class, field_name, related_model):
                 )
         # Special handling for relationship fields that become descriptors
         elif field_name in ["tenant", "option"]:
-            if not (hasattr(field, "field") and isinstance(field.field, models.ForeignKey)):
+            if not (
+                hasattr(field, "field") and isinstance(field.field, models.ForeignKey)
+            ):
                 raise ModelValidationError(
                     f"Invalid relationship field '{field_name}' on {model_class.__name__}. "
                     f"Expected ForeignKey relationship"
                 )
         elif field_name == "associated_tenants":
-            if not (hasattr(field, "field") and isinstance(field.field, models.ManyToManyField)):
+            if not (
+                hasattr(field, "field")
+                and isinstance(field.field, models.ManyToManyField)
+            ):
                 raise ModelValidationError(
                     f"Invalid relationship field '{field_name}' on {model_class.__name__}. "
                     f"Expected ManyToManyField relationship"
                 )
         else:
-            if not isinstance(field, related_model) and not issubclass(type(field), related_model):
+            if not isinstance(field, related_model) and not issubclass(
+                type(field), related_model
+            ):
                 raise ModelValidationError(
                     f"Invalid type for '{field_name}' on {model_class.__name__}. "
                     f"Expected {related_model.__name__}, got {type(field).__name__}"
@@ -158,7 +166,9 @@ def validate_model_has_attribute(model, attr: str, attr_type=None):
         if not hasattr(model, attr):
             raise AttributeError(f"Model {model.__name__} is missing attribute {attr}.")
         if attr_type and not isinstance(getattr(model, attr), attr_type):
-            raise AttributeError(f"Model {model.__name__} has incorrect type for attribute {attr}.")
+            raise AttributeError(
+                f"Model {model.__name__} has incorrect type for attribute {attr}."
+            )
     except AttributeError as exc:
         logger.exception("validate_model_has_attribute error: %s", exc)
         raise
@@ -180,30 +190,49 @@ class TenantOptionsCoreModelBase(ModelBase):
                     validate_model_has_attribute(ConcreteModel, "tenant_on_delete")
 
                     validate_model_relationship(ConcreteModel, "tenant_model", str)
-                    validate_model_relationship(ConcreteModel, "tenant_on_delete", models.Field)
+                    validate_model_relationship(
+                        ConcreteModel, "tenant_on_delete", models.Field
+                    )
 
                     validate_model_is_concrete(ConcreteModel)
 
-                    fields = {
-                        "on_delete": ConcreteModel.tenant_on_delete,
-                        "related_name": ConcreteModel.tenant_model_related_name,
-                        "related_query_name": ConcreteModel.tenant_model_related_query_name,
-                    }
+                    # Check if 'tenant' field already exists to prevent duplicate field creation
+                    # Critical for PostgreSQL tests where metaclasses can run multiple times
+                    if not hasattr(ConcreteModel, "tenant") or "tenant" not in [
+                        f.name for f in ConcreteModel._meta.get_fields()
+                    ]:
+                        fields = {
+                            "on_delete": ConcreteModel.tenant_on_delete,
+                            "related_name": ConcreteModel.tenant_model_related_name,
+                            "related_query_name": ConcreteModel.tenant_model_related_query_name,
+                        }
 
-                    # If the model is AbstractOption, allow the ForeignKey to be blank and null.
-                    #   This is because the tenant is not used for MANDATORY or OPTIONAL Options
-                    #   but is needed for CUSTOM Options and is required for all Selections.
-                    if base.__name__ == "AbstractOption":
-                        fields["blank"] = True
-                        fields["null"] = True
+                        # If the model is AbstractOption, allow the ForeignKey to be blank and null.
+                        #   This is because the tenant is not used for MANDATORY or OPTIONAL Options
+                        #   but is needed for CUSTOM Options and is required for all Selections.
+                        if base.__name__ == "AbstractOption":
+                            fields["blank"] = True
+                            fields["null"] = True
 
-                    ConcreteModel.add_to_class(
-                        "tenant", model_config.foreignkey_class(ConcreteModel.tenant_model, **fields)
-                    )
+                        ConcreteModel.add_to_class(
+                            "tenant",
+                            model_config.foreignkey_class(
+                                ConcreteModel.tenant_model, **fields
+                            ),
+                        )
 
-                    # Validate the tenant field after it's been added
-                    logger.debug("Validating tenant field after adding it to %s", name)
-                    validate_model_relationship(ConcreteModel, "tenant", model_config.foreignkey_class)
+                        # Validate the tenant field after it's been added
+                        logger.debug(
+                            "Validating tenant field after adding it to %s", name
+                        )
+                        validate_model_relationship(
+                            ConcreteModel, "tenant", model_config.foreignkey_class
+                        )
+                    else:
+                        logger.debug(
+                            "Field 'tenant' already exists on %s, skipping add_to_class",
+                            name,
+                        )
 
         except Exception as e:
             logger.exception(
@@ -246,23 +275,44 @@ class OptionModelBase(TenantOptionsCoreModelBase):
                     validate_model_has_attribute(ConcreteOptionModel, "tenant_model")
                     validate_model_has_attribute(ConcreteOptionModel, "selection_model")
 
-                    validate_model_relationship(ConcreteOptionModel, "selection_model", str)
+                    validate_model_relationship(
+                        ConcreteOptionModel, "selection_model", str
+                    )
 
                     validate_model_is_concrete(ConcreteOptionModel)
 
-                    ConcreteOptionModel.add_to_class(
-                        "associated_tenants",
-                        models.ManyToManyField(
-                            ConcreteOptionModel.tenant_model,
-                            through=ConcreteOptionModel.selection_model,
-                            through_fields=("option", "tenant"),
-                            related_name=ConcreteOptionModel.associated_tenants_related_name,  # "selected"
-                            related_query_name=ConcreteOptionModel.associated_tenants_related_query_name,
-                        ),
-                    )
+                    # Check if 'associated_tenants' field already exists to prevent duplicate field creation
+                    # Critical for PostgreSQL tests where metaclasses can run multiple times
+                    if not hasattr(
+                        ConcreteOptionModel, "associated_tenants"
+                    ) or "associated_tenants" not in [
+                        f.name for f in ConcreteOptionModel._meta.get_fields()
+                    ]:
+                        ConcreteOptionModel.add_to_class(
+                            "associated_tenants",
+                            models.ManyToManyField(
+                                ConcreteOptionModel.tenant_model,
+                                through=ConcreteOptionModel.selection_model,
+                                through_fields=("option", "tenant"),
+                                related_name=ConcreteOptionModel.associated_tenants_related_name,  # "selected"
+                                related_query_name=ConcreteOptionModel.associated_tenants_related_query_name,
+                            ),
+                        )
 
-                    logger.debug("Validating associated_tenants field after adding it to %s", name)
-                    validate_model_relationship(ConcreteOptionModel, "associated_tenants", models.ManyToManyField)
+                        logger.debug(
+                            "Validating associated_tenants field after adding it to %s",
+                            name,
+                        )
+                        validate_model_relationship(
+                            ConcreteOptionModel,
+                            "associated_tenants",
+                            models.ManyToManyField,
+                        )
+                    else:
+                        logger.debug(
+                            "Field 'associated_tenants' already exists on %s, skipping add_to_class",
+                            name,
+                        )
 
         except Exception as e:
             logger.exception("Error creating model %s in OptionModelBase: %s", name, e)
@@ -301,27 +351,50 @@ class SelectionModelBase(TenantOptionsCoreModelBase):
                     ConcreteSelectionModel = model  # pylint: disable=C0103
 
                     validate_model_has_attribute(ConcreteSelectionModel, "option_model")
-                    validate_model_has_attribute(ConcreteSelectionModel, "option_on_delete")
+                    validate_model_has_attribute(
+                        ConcreteSelectionModel, "option_on_delete"
+                    )
 
-                    validate_model_relationship(ConcreteSelectionModel, "option_model", str)
-                    validate_model_relationship(ConcreteSelectionModel, "option_on_delete", models.Field)
+                    validate_model_relationship(
+                        ConcreteSelectionModel, "option_model", str
+                    )
+                    validate_model_relationship(
+                        ConcreteSelectionModel, "option_on_delete", models.Field
+                    )
 
                     validate_model_is_concrete(ConcreteSelectionModel)
 
-                    ConcreteSelectionModel.add_to_class(
-                        "option",
-                        model_config.foreignkey_class(
-                            ConcreteSelectionModel.option_model,
-                            on_delete=ConcreteSelectionModel.option_on_delete,
-                            related_name=ConcreteSelectionModel.option_model_related_name,
-                            related_query_name=ConcreteSelectionModel.option_model_related_query_name,
-                            blank=True,
-                            null=True,
-                        ),
-                    )
+                    # Check if 'option' field already exists to prevent duplicate field creation
+                    # Critical for PostgreSQL tests where metaclasses can run multiple times
+                    if not hasattr(
+                        ConcreteSelectionModel, "option"
+                    ) or "option" not in [
+                        f.name for f in ConcreteSelectionModel._meta.get_fields()
+                    ]:
+                        # Allow field to be required (remove blank=True, null=True)
+                        ConcreteSelectionModel.add_to_class(
+                            "option",
+                            model_config.foreignkey_class(
+                                ConcreteSelectionModel.option_model,
+                                on_delete=ConcreteSelectionModel.option_on_delete,
+                                related_name=ConcreteSelectionModel.option_model_related_name,
+                                related_query_name=ConcreteSelectionModel.option_model_related_query_name,
+                            ),
+                        )
 
-                    logger.debug("Validating option field after adding it to %s", name)
-                    validate_model_relationship(ConcreteSelectionModel, "option", model_config.foreignkey_class)
+                        logger.debug(
+                            "Validating option field after adding it to %s", name
+                        )
+                        validate_model_relationship(
+                            ConcreteSelectionModel,
+                            "option",
+                            model_config.foreignkey_class,
+                        )
+                    else:
+                        logger.debug(
+                            "Field 'option' already exists on %s, skipping add_to_class",
+                            name,
+                        )
 
         except Exception as e:
             logger.exception(
@@ -368,7 +441,9 @@ class OptionQuerySet(model_config.queryset_class):
             return self.filter(base_query)
         return self.active().filter(base_query)
 
-    def selected_options_for_tenant(self, tenant, include_deleted=False) -> models.QuerySet:
+    def selected_options_for_tenant(
+        self, tenant, include_deleted=False
+    ) -> models.QuerySet:
         """Returns a QuerySet of the AbstractOption subclassed model.
 
         Includes all *selected* options for a given tenant, including:
@@ -387,11 +462,18 @@ class OptionQuerySet(model_config.queryset_class):
 
         try:
             SelectionModel = self.model.associated_tenants.through  # pylint: disable=C0103
-            selections = SelectionModel.objects.active().filter(tenant=tenant).values_list("option", flat=True)
+            selections = (
+                SelectionModel.objects.active()
+                .filter(tenant=tenant)
+                .values_list("option", flat=True)
+            )
 
             base_query = Q(option_type=OptionType.MANDATORY) | (
                 Q(id__in=selections)
-                & (Q(option_type=OptionType.OPTIONAL) | Q(option_type=OptionType.CUSTOM, tenant=tenant))
+                & (
+                    Q(option_type=OptionType.OPTIONAL)
+                    | Q(option_type=OptionType.CUSTOM, tenant=tenant)
+                )
             )
 
             if include_deleted:
@@ -428,20 +510,27 @@ class OptionManager(model_config.manager_class):
         """Provided a tenant and a option name, creates the new option for that tenant."""
         try:
             logger.debug(
-                "Creating custom option for tenant: %s", {"tenant_id": getattr(tenant, "id", None), "name": name}
+                "Creating custom option for tenant: %s",
+                {"tenant_id": getattr(tenant, "id", None), "name": name},
             )
 
             # Validate tenant exists
             if not tenant:
-                raise ValueError("Tenant must be provided when creating a custom option")
+                raise ValueError(
+                    "Tenant must be provided when creating a custom option"
+                )
 
             # Check for name conflicts
-            if self.filter(name=name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL]).exists():
+            if self.filter(
+                name=name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL]
+            ).exists():
                 raise ValidationError(
                     f'Cannot create custom option with name "{name}" as it conflicts with an existing default option'
                 )
 
-            option = self.create(tenant=tenant, name=name, option_type=OptionType.CUSTOM)
+            option = self.create(
+                tenant=tenant, name=name, option_type=OptionType.CUSTOM
+            )
 
             logger.info(
                 "Successfully created custom option: %s",
@@ -473,7 +562,9 @@ class OptionManager(model_config.manager_class):
         """Provided an option name, creates the new optional option (selectable by all tenants)."""
         return self.create(name=name, option_type=OptionType.OPTIONAL)
 
-    def _update_or_create_default_option(self, item_name: str, options_dict: dict = dict):
+    def _update_or_create_default_option(
+        self, item_name: str, options_dict: dict = dict
+    ):
         """Updates or creates a single default Mandatory or Optional option.
 
         Requires a name and options_dict, which may contain the following keys:
@@ -489,7 +580,9 @@ class OptionManager(model_config.manager_class):
         #   Note: CUSTOM option types cannot be defined as a default option
         for key, value in options_dict.items():
             if key == "option_type":
-                option_type = value  # Set the option_type variable to the value provided
+                option_type = (
+                    value  # Set the option_type variable to the value provided
+                )
                 if option_type not in [OptionType.MANDATORY, OptionType.OPTIONAL]:
                     raise InvalidDefaultOptionError(
                         f"Option defaults must be of type `OptionType.MANDATORY` or `OptionType.OPTIONAL`. "
@@ -499,7 +592,9 @@ class OptionManager(model_config.manager_class):
         self.model.objects.update_or_create(
             name=item_name,
             option_type=option_type,
-            defaults={"deleted": None},  # Undelete the option if it was previously deleted
+            defaults={
+                "deleted": None
+            },  # Undelete the option if it was previously deleted
         )
 
     def _update_default_options(self) -> dict:
@@ -539,7 +634,8 @@ class OptionManager(model_config.manager_class):
 
         # Soft delete options no longer in defaults
         existing_options = self.model.objects.filter(
-            option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL], deleted__isnull=True
+            option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL],
+            deleted__isnull=True,
         ).exclude(name__in=default_options.keys())
 
         for option in existing_options:
@@ -561,12 +657,13 @@ def get_constraint_dict():
             return "check"
         return "condition"
 
-    # Options of type OptionType.CUSTOM must have a specified tenant, and Options of
-    # type OptionType.MANDATORY and OptionType.OPTIONAL must not have a specified tenant
+    # Allow both required and optional tenant relationships based on option type
+    condition = Q(option_type=OptionType.CUSTOM, tenant__isnull=False) | Q(
+        option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL], tenant__isnull=True
+    )
+
     return {
-        get_condition_argument_name(): Q(option_type=OptionType.CUSTOM, tenant__isnull=False)
-        | Q(option_type=OptionType.MANDATORY, tenant__isnull=True)
-        | Q(option_type=OptionType.OPTIONAL, tenant__isnull=True),
+        get_condition_argument_name(): condition,
         "name": "%(app_label)s_%(class)s_tenant_check",
     }
 
@@ -628,6 +725,7 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             CheckConstraint(**get_constraint_dict()),
         ]
         abstract = True
+        default_related_name = "%(app_label)s_%(class)s_option"
 
     def delete(self, using=None, keep_parents=False, override=False):
         """Delete the option, with option for hard delete.
@@ -646,13 +744,17 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
             if override:
                 # Update related selections
                 selection_model_class = apps.get_model(self.selection_model)
-                selections_count = selection_model_class.objects.filter(option=self).count()
+                selections_count = selection_model_class.objects.filter(
+                    option=self
+                ).count()
                 logger.info(
                     "Updating related selections before hard delete: %s",
                     {"option_id": self.id, "selections_count": selections_count},
                 )
 
-                selection_model_class.objects.filter(option=self).update(deleted=timezone.now())
+                selection_model_class.objects.filter(option=self).update(
+                    deleted=timezone.now()
+                )
                 result = super().delete(using=using, keep_parents=keep_parents)
                 logger.info(
                     "Hard deleted option and updated selections: %s",
@@ -700,7 +802,9 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
         has_valid_manager = False
 
         for manager in managers:
-            results = check_manager_compliance(cls, manager, OptionManager, OptionQuerySet, ("001", "002"))
+            results = check_manager_compliance(
+                cls, manager, OptionManager, OptionQuerySet, ("001", "002")
+            )
             errors.extend(results)
 
             # Check if this manager is fully compliant
@@ -717,40 +821,101 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
                 )
             )
 
+        # Check for Meta inheritance - validate expected constraints are present
+        constraint_names = [
+            c.name % {"app_label": cls._meta.app_label, "class": cls._meta.model_name}
+            for c in cls._meta.constraints
+        ]
+
+        # Expected constraints from AbstractOption.Meta
+        expected_unique_constraint = (
+            f"{cls._meta.app_label}_{cls._meta.model_name}_unique_name"
+        )
+        expected_check_constraint = (
+            f"{cls._meta.app_label}_{cls._meta.model_name}_tenant_check"
+        )
+
+        if expected_unique_constraint not in constraint_names:
+            errors.append(
+                Warning(
+                    f"Model {cls.__name__} may be missing the unique name constraint. "
+                    f"Ensure the Meta class inherits from AbstractOption.Meta to preserve database constraints. "
+                    f"Example: class Meta(AbstractOption.Meta): ...",
+                    obj=cls,
+                    id="django_tenant_options.W007",
+                )
+            )
+
+        if expected_check_constraint not in constraint_names:
+            errors.append(
+                Warning(
+                    f"Model {cls.__name__} may be missing the tenant check constraint. "
+                    f"Ensure the Meta class inherits from AbstractOption.Meta to preserve database constraints. "
+                    f"Example: class Meta(AbstractOption.Meta): ...",
+                    obj=cls,
+                    id="django_tenant_options.W008",
+                )
+            )
+
         return errors
 
     def validate_option_tenant_relationship(self):
         """Validate option type and tenant relationship"""
         if self.option_type == OptionType.CUSTOM and not self.tenant_id:
             raise ValidationError("Custom options must have a tenant")
-        elif self.option_type in [OptionType.MANDATORY, OptionType.OPTIONAL] and self.tenant_id:
+        elif (
+            self.option_type in [OptionType.MANDATORY, OptionType.OPTIONAL]
+            and self.tenant_id
+        ):
             raise ValidationError("Default options cannot have a tenant")
 
     def clean(self):
         """Ensure no tenant can have the same name as a MANDATORY or OPTIONAL option."""
         try:
+            # Validate option type and tenant relationship
             self.validate_option_tenant_relationship()
 
             # Check for name conflicts
             if self.option_type == OptionType.CUSTOM:
-                existing = (
+                conflicting = (
                     type(self)
-                    .objects.filter(name__iexact=self.name, option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL])
-                    .exists()
+                    .objects.filter(
+                        name__iexact=self.name,
+                        option_type__in=[OptionType.MANDATORY, OptionType.OPTIONAL],
+                    )
+                    .first()
                 )
-                if existing:
+                if conflicting:
+                    default_options = getattr(type(self), "default_options", {})
+                    default_names = ", ".join(
+                        f'"{name}"' for name in sorted(default_options.keys())
+                    )
+
                     raise ValidationError(
-                        f'Cannot create custom option with name "{self.name}" as it conflicts with an existing default option'
+                        f'Cannot create custom option "{self.name}" because it conflicts with an existing '
+                        f"{conflicting.get_option_type_display()} option. "
+                        f"Available default options: [{default_names}]. "
+                        f'Suggestion: Choose a different name or select the existing "{conflicting.name}" option instead.'
                     )
 
             super().clean()
 
-            if self.option_type in [OptionType.MANDATORY, OptionType.OPTIONAL] and self.tenant_id:
-                raise ValidationError("Default options cannot have a tenant")
-            if self.option_type == OptionType.CUSTOM and not self.tenant_id:
-                raise ValidationError("Custom options must have a tenant")
         except ValidationError as e:
-            logger.error("Option validation failed: %s\nOption: %s", str(e), self.__dict__)
+            logger.error(
+                "Option validation failed for %s: %s",
+                self.__class__.__name__,
+                str(e),
+                extra={
+                    "option_name": self.name,
+                    "option_type": self.option_type,
+                    "tenant_id": getattr(self.tenant, "id", None)
+                    if self.tenant
+                    else None,
+                    "available_defaults": list(
+                        getattr(type(self), "default_options", {}).keys()
+                    ),
+                },
+            )
             raise
 
     def save(self, *args, **kwargs):
@@ -758,7 +923,11 @@ class AbstractOption(model_config.model_class, metaclass=OptionModelBase):
         try:
             logger.debug(
                 "Validating option before save: %s",
-                {"name": self.name, "option_type": self.option_type, "tenant_id": getattr(self.tenant, "id", None)},
+                {
+                    "name": self.name,
+                    "option_type": self.option_type,
+                    "tenant_id": getattr(self.tenant, "id", None),
+                },
             )
             self.clean()
             super().save(*args, **kwargs)
@@ -822,7 +991,9 @@ class SelectionManager(model_config.manager_class):
         """
         try:
             OptionsModel = apps.get_model(self.model.option_model)  # pylint: disable=C0103
-            return OptionsModel.objects.options_for_tenant(tenant=tenant, include_deleted=include_deleted)
+            return OptionsModel.objects.options_for_tenant(
+                tenant=tenant, include_deleted=include_deleted
+            )
         except LookupError as e:
             # no such model in this application
             logger.warning(e)
@@ -846,7 +1017,9 @@ class SelectionManager(model_config.manager_class):
         )
         try:
             OptionsModel = apps.get_model(self.model.option_model)  # pylint: disable=C0103
-            return OptionsModel.objects.selected_options_for_tenant(tenant=tenant, include_deleted=include_deleted)
+            return OptionsModel.objects.selected_options_for_tenant(
+                tenant=tenant, include_deleted=include_deleted
+            )
         except LookupError as e:
             # no such model in this application
             logger.warning(e)
@@ -889,9 +1062,15 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
         verbose_name_plural = _("Selections")
         constraints = [
             # Prevent selections with invalid option references
-            models.CheckConstraint(check=~Q(option_id__isnull=True), name="%(app_label)s_%(class)s_option_not_null"),
+            models.CheckConstraint(
+                check=~Q(option_id__isnull=True),
+                name="%(app_label)s_%(class)s_option_not_null",
+            ),
             # Prevent selections with invalid tenant references
-            models.CheckConstraint(check=~Q(tenant_id__isnull=True), name="%(app_label)s_%(class)s_tenant_not_null"),
+            models.CheckConstraint(
+                check=~Q(tenant_id__isnull=True),
+                name="%(app_label)s_%(class)s_tenant_not_null",
+            ),
             # Prevent duplicate selections
             models.UniqueConstraint(
                 fields=["tenant", "option"],
@@ -914,21 +1093,44 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
 
             # Validate option exists
             if not self.option_id:
-                raise ValidationError("Option must be specified")
+                raise ValidationError(
+                    "Option must be specified. Please select an option from the available choices."
+                )
 
             # Validate tenant exists
             if not self.tenant_id:
-                raise ValidationError("Tenant must be specified")
+                raise ValidationError(
+                    "Tenant must be specified. This selection cannot be created without a tenant."
+                )
 
             # Validate option is active
             if getattr(self.option, "deleted", None):
-                raise ValidationError("Cannot select a deleted option")
+                # Get active options for helpful error message
+                try:
+                    from django.apps import apps
+
+                    OptionModel = apps.get_model(self.option_model)  # pylint: disable=C0103
+                    active_count = OptionModel.objects.selected_options_for_tenant(
+                        self.tenant
+                    ).count()
+                    raise ValidationError(
+                        f'Cannot select deleted option "{self.option.name}". '
+                        f"This option was deleted on {self.option.deleted.strftime('%Y-%m-%d')}. "
+                        f"Suggestion: Choose from the {active_count} active options available to this tenant."
+                    )
+                except Exception:  # pylint: disable=W0718
+                    raise ValidationError(
+                        f'Cannot select deleted option "{self.option.name}". '
+                        "Suggestion: Choose an active option instead."
+                    )
 
             # Check tenant ownership
             if self.option.tenant and self.option.tenant != self.tenant:
                 raise ValidationError(
-                    f'The selected custom option "{self.option.name}" belongs to tenant "{self.option.tenant}", '
-                    f'and is not available to tenant "{self.tenant}".'
+                    f'The custom option "{self.option.name}" belongs to "{self.option.tenant}" '
+                    f'and cannot be selected by "{self.tenant}". '
+                    f"Suggestion: Create a custom option with this name for your tenant, "
+                    f"or select from the available default options."
                 )
 
             # Additional FK validation logic
@@ -937,7 +1139,10 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
                 self.tenant.refresh_from_db()
                 self.option.refresh_from_db()
             except (AttributeError, ObjectDoesNotExist) as e:
-                raise ValidationError(f"Invalid relationship: {str(e)}") from e
+                raise ValidationError(
+                    f"Invalid relationship: {str(e)}. "
+                    "The option or tenant may have been deleted. Please refresh and try again."
+                ) from e
 
             super().clean()
 
@@ -948,11 +1153,16 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
 
         except ValidationError as e:
             logger.error(
-                "Selection validation failed: %s",
-                {
+                "Selection validation failed for %s: %s",
+                self.__class__.__name__,
+                str(e),
+                extra={
                     "tenant_id": getattr(self.tenant, "id", None),
+                    "tenant_name": str(self.tenant) if self.tenant else None,
                     "option_id": getattr(self.option, "id", None),
-                    "error": str(e),
+                    "option_name": getattr(self.option, "name", None),
+                    "option_type": getattr(self.option, "option_type", None),
+                    "option_deleted": getattr(self.option, "deleted", None) is not None,
                 },
             )
             raise
@@ -1010,7 +1220,9 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
         has_valid_manager = False
 
         for manager in managers:
-            results = check_manager_compliance(cls, manager, SelectionManager, SelectionQuerySet, ("004", "005"))
+            results = check_manager_compliance(
+                cls, manager, SelectionManager, SelectionQuerySet, ("004", "005")
+            )
             errors.extend(results)
 
             # Check if this manager is fully compliant
@@ -1024,6 +1236,56 @@ class AbstractSelection(model_config.model_class, metaclass=SelectionModelBase):
                     "and uses SelectionQuerySet",
                     obj=cls,
                     id="django_tenant_options.E006",
+                )
+            )
+
+        # Check for Meta inheritance - validate expected constraints are present
+        constraint_names = [
+            c.name % {"app_label": cls._meta.app_label, "class": cls._meta.model_name}
+            for c in cls._meta.constraints
+        ]
+
+        # Expected constraints from AbstractSelection.Meta
+        expected_option_check = (
+            f"{cls._meta.app_label}_{cls._meta.model_name}_option_not_null"
+        )
+        expected_tenant_check = (
+            f"{cls._meta.app_label}_{cls._meta.model_name}_tenant_not_null"
+        )
+        expected_unique_constraint = (
+            f"{cls._meta.app_label}_{cls._meta.model_name}_unique_active_selection"
+        )
+
+        if expected_option_check not in constraint_names:
+            errors.append(
+                Warning(
+                    f"Model {cls.__name__} may be missing the option_not_null check constraint. "
+                    f"Ensure the Meta class inherits from AbstractSelection.Meta to preserve database constraints. "
+                    f"Example: class Meta(AbstractSelection.Meta): ...",
+                    obj=cls,
+                    id="django_tenant_options.W009",
+                )
+            )
+
+        if expected_tenant_check not in constraint_names:
+            errors.append(
+                Warning(
+                    f"Model {cls.__name__} may be missing the tenant_not_null check constraint. "
+                    f"Ensure the Meta class inherits from AbstractSelection.Meta to preserve database constraints. "
+                    f"Example: class Meta(AbstractSelection.Meta): ...",
+                    obj=cls,
+                    id="django_tenant_options.W010",
+                )
+            )
+
+        if expected_unique_constraint not in constraint_names:
+            errors.append(
+                Warning(
+                    f"Model {cls.__name__} may be missing the unique active selection constraint. "
+                    f"Ensure the Meta class inherits from AbstractSelection.Meta to preserve database constraints. "
+                    f"Example: class Meta(AbstractSelection.Meta): ...",
+                    obj=cls,
+                    id="django_tenant_options.W011",
                 )
             )
 
