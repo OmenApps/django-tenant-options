@@ -1031,12 +1031,19 @@ class TestUserFacingFormMixin:
     def test_foreign_key_field_initial_values_none(self):
         """Test initial values for foreign key fields when values are None."""
         tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-tenant")
+        # Create a priority option since priority field is required (not nullable)
+        priority = TaskPriorityOption.objects.create(name="Test Priority", option_type=OptionType.MANDATORY)
+        TaskPrioritySelection.objects.create(tenant=tenant, option=priority)
+
+        # Create task with required priority but None for optional status
         task = Task.objects.create(
-            title="Test Task", description="Test Description", priority=None, status=None, user=self.user
+            title="Test Task", description="Test Description", priority=priority, status=None, user=self.user
         )
 
         form = self.TestUserFacingForm(tenant=tenant, instance=task)
-        assert form.fields["priority"].initial is None
+        # Priority should have the initial value set since it exists
+        assert form.fields["priority"].initial == priority.pk
+        # Status allows None and should have None as initial
         assert form.fields["status"].initial is None
 
     def test_clean_with_disabled_deleted_selection(self):
