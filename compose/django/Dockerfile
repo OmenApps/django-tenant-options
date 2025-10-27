@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm
 
 ARG BUILD_ENVIRONMENT=local
 ARG APP_HOME=/app
@@ -29,10 +29,10 @@ RUN pip install --upgrade pip cffi
 
 # Install multiple Python versions with uv
 RUN if [ "$MULTIPLE_PYTHON" = "True" ] ; then \
-    uv python install 3.10; \
     uv python install 3.11; \
     uv python install 3.12; \
     uv python install 3.13; \
+    uv python install 3.14; \
     fi
 
 # Copy requirements files
@@ -47,7 +47,7 @@ COPY ./example_project/ ${APP_HOME}/example_project/
 COPY ./src/ ${APP_HOME}/src/
 
 # Install dependencies using uv
-RUN uv venv --python 3.11
+RUN uv venv --python 3.14
 RUN uv sync --prerelease=allow
 
 # Project initialization:

@@ -12,17 +12,18 @@ from nox.sessions import Session
 
 # DJANGO_STABLE_VERSION should be set to the latest Django LTS version
 
-DJANGO_STABLE_VERSION = "5.1"
+DJANGO_STABLE_VERSION = "5.2"
 DJANGO_VERSIONS = [
     "4.2",
     "5.0",
     "5.1",
+    "5.2",
 ]
 
 # PYTHON_STABLE_VERSION should be set to the latest stable Python version
 
-PYTHON_STABLE_VERSION = "3.12"
-PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13"]
+PYTHON_STABLE_VERSION = "3.14"
+PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 
 
 PACKAGE = "django_tenant_options"
@@ -54,7 +55,8 @@ def activate_virtualenv_in_precommit_hooks(session: Session) -> None:
     # quoting rules for Python and bash, but strip the outermost quotes so we
     # can detect paths within the bindir, like <bindir>/python.
     bindirs = [
-        bindir[1:-1] if bindir[0] in "'\"" else bindir for bindir in (repr(session.bin), shlex.quote(session.bin))
+        bindir[1:-1] if bindir[0] in "'\"" else bindir
+        for bindir in (repr(session.bin), shlex.quote(session.bin))
     ]
 
     virtualenv = session.env.get("VIRTUAL_ENV")
@@ -96,7 +98,10 @@ def activate_virtualenv_in_precommit_hooks(session: Session) -> None:
 
         text = hook.read_text()
 
-        if not any(Path("A") == Path("a") and bindir.lower() in text.lower() or bindir in text for bindir in bindirs):
+        if not any(
+            Path("A") == Path("a") and bindir.lower() in text.lower() or bindir in text
+            for bindir in bindirs
+        ):
             continue
 
         lines = text.splitlines()
@@ -152,7 +157,6 @@ def tests(session: Session, django: str) -> None:
     """Run the test suite."""
     session.run("uv", "sync", "--prerelease=allow", "--extra=dev")
     try:
-
         session.run("coverage", "run", "-m", "pytest", "-vv", *session.posargs)
     finally:
         if session.interactive:
