@@ -2,13 +2,26 @@
 
 import inspect
 
+from django.conf import settings
 from django.core.checks import Error
 from django.core.checks import Warning
 
 
-def check_manager_compliance(model, manager, required_manager, required_queryset, error_ids):
+def check_manager_compliance(
+    model,
+    manager,
+    required_manager,
+    required_queryset,
+    error_ids,
+):
     """Helper function to check if a manager complies with requirements."""
     results = []
+
+    if not settings.DEBUG:
+        # Skip this check in production
+        return results
+
+    # Check if the manager is a subclass of the required manager
     manager_mro = inspect.getmro(manager.__class__)
     queryset_mro = inspect.getmro(manager._queryset_class)
 
