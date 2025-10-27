@@ -128,6 +128,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Tenant settings
 DJANGO_TENANT_OPTIONS = {
     "TENANT_MODEL": "example.Tenant",
+    "MODEL_CLASS": "auto_prefetch.Model",  # Default: django.db.models.Model
+    "MANAGER_CLASS": "auto_prefetch.Manager",  # Default: django.db.models.Manager
+    "QUERYSET_CLASS": "auto_prefetch.QuerySet",  # Default: django.db.models.QuerySet
+    "FOREIGNKEY_CLASS": "auto_prefetch.ForeignKey",  # Default: django.db.models.ForeignKey
+    "ONETOONEFIELD_CLASS": "auto_prefetch.OneToOneField",  # Default: django.db.models.OneToOneField
 }
 
 DJANGO_LOG_LEVEL = "DEBUG"
