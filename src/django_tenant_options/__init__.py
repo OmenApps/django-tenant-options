@@ -11,16 +11,16 @@ def is_installed_less_than_version(version: str) -> bool:
 
     `version` should be in the format of `major.minor.patch` like `3.2.1`.
     """
-    installed_version = get_version().split(".")
-    version = version.split(".")
-    if int(version[0]) < int(installed_version[0]):
+    installed_parts = get_version().split(".")
+    version_parts = version.split(".")
+    if int(installed_parts[0]) < int(version_parts[0]):
         return True
-    if int(version[0]) == int(installed_version[0]) and int(version[1]) < int(installed_version[1]):
+    if int(installed_parts[0]) == int(version_parts[0]) and int(installed_parts[1]) < int(version_parts[1]):
         return True
     if (
-        int(version[0]) == int(installed_version[0])
-        and int(version[1]) == int(installed_version[1])
-        and int(version[2]) < int(installed_version[2])
+        int(installed_parts[0]) == int(version_parts[0])
+        and int(installed_parts[1]) == int(version_parts[1])
+        and int(installed_parts[2]) < int(version_parts[2])
     ):
         return True
     return False

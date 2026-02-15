@@ -72,6 +72,7 @@ class OptionFormMixin:
     """Base mixin for all Option forms."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the form and set option_type to CUSTOM."""
         super().__init__(*args, **kwargs)
         if "option_type" in self.fields:
             self.fields["option_type"].initial = OptionType.CUSTOM
@@ -230,7 +231,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
     def save(self, *args, **kwargs):
         """Save the selections to the database, handling added and removed options."""
         try:
-            with transaction.atomic():
+            with transaction.atomic():  # type: ignore[reportGeneralTypeIssues]
                 self._delete_removed_selections()
                 self._save_new_selections()
         except IntegrityError as e:

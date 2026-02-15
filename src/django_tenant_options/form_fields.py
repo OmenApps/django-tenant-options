@@ -13,7 +13,7 @@ logger = logging.getLogger("django_tenant_options")
 class OptionsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
     """Displays objects and shows which are mandatory."""
 
-    def label_from_instance(self, obj):
+    def label_from_instance(self, obj) -> str:
         """Return a label for each object."""
         labels = {
             OptionType.MANDATORY: f"{obj.name} (mandatory)",
@@ -21,4 +21,4 @@ class OptionsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
             OptionType.CUSTOM: f"{obj.name} (custom)",
         }
 
-        return labels.get(obj.option_type, obj.name)
+        return labels.get(obj.option_type) or str(obj.name)

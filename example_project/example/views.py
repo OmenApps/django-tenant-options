@@ -6,7 +6,6 @@ from django.shortcuts import get_object_or_404
 from django.shortcuts import redirect
 from django.shortcuts import render
 from django.template.response import TemplateResponse
-from django.utils.translation import gettext as _
 
 from .forms import TaskForm
 from .forms import TaskPriorityOptionCreateForm

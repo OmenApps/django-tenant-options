@@ -13,23 +13,25 @@ Here is what it should look like in the settings.py file of the project:
 
 import importlib
 import logging
+from typing import cast
 
-from django_tenant_options.form_fields import (  # noqa: F401
-    OptionsModelMultipleChoiceField,
-)
+from django.core.exceptions import ImproperlyConfigured
+
+from django_tenant_options.form_fields import OptionsModelMultipleChoiceField  # noqa: F401
 
 
 try:
     import_error = None
     from django.conf import settings
-    from django.core.exceptions import ImproperlyConfigured
     from django.db import models
 except ImproperlyConfigured as e:
     import_error = "Settings could not be imported: %s", e
     settings = None  # pylint: disable=C0103
+    models = None  # type: ignore[assignment]
 except ImportError as e:
     import_error = "Django could not be imported. Settings cannot be loaded: %s", e
     settings = None  # pylint: disable=C0103
+    models = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,7 @@ class ModelClassConfig:
     """Configuration class for model base classes."""
 
     def __init__(self):
+        """Initialize with lazy-loaded default class references."""
         self._model_class = None
         self._manager_class = None
         self._queryset_class = None
@@ -104,10 +107,10 @@ class ModelClassConfig:
         return value
 
     @property
-    def model_class(self):
+    def model_class(self) -> type:
         """The base class to use for all django-tenant-options models."""
         self._ensure_initialized()
-        return self._model_class
+        return cast(type, self._model_class)
 
     @model_class.setter
     def model_class(self, value):
@@ -116,10 +119,10 @@ class ModelClassConfig:
         self._initialized = True
 
     @property
-    def manager_class(self):
+    def manager_class(self) -> type:
         """The base class to use for all django-tenant-options model managers."""
         self._ensure_initialized()
-        return self._manager_class
+        return cast(type, self._manager_class)
 
     @manager_class.setter
     def manager_class(self, value):
@@ -128,10 +131,10 @@ class ModelClassConfig:
         self._initialized = True
 
     @property
-    def queryset_class(self):
+    def queryset_class(self) -> type:
         """The base class to use for all django-tenant-options model querysets."""
         self._ensure_initialized()
-        return self._queryset_class
+        return cast(type, self._queryset_class)
 
     @queryset_class.setter
     def queryset_class(self, value):
@@ -140,10 +143,10 @@ class ModelClassConfig:
         self._initialized = True
 
     @property
-    def foreignkey_class(self):
+    def foreignkey_class(self) -> type:
         """The base class to use for all django-tenant-options foreign keys."""
         self._ensure_initialized()
-        return self._foreignkey_class
+        return cast(type, self._foreignkey_class)
 
     @foreignkey_class.setter
     def foreignkey_class(self, value):
@@ -152,10 +155,10 @@ class ModelClassConfig:
         self._initialized = True
 
     @property
-    def onetoonefield_class(self):
+    def onetoonefield_class(self) -> type:
         """The base class to use for all django-tenant-options one-to-one fields."""
         self._ensure_initialized()
-        return self._onetoonefield_class
+        return cast(type, self._onetoonefield_class)
 
     @onetoonefield_class.setter
     def onetoonefield_class(self, value):

@@ -27,11 +27,7 @@ class Command(BaseCommand):
         warnings = []
 
         self.stdout.write("\n" + "=" * 70)
-        self.stdout.write(
-            self.style.MIGRATE_HEADING(
-                "  Django Tenant Options Configuration Validation"
-            )
-        )
+        self.stdout.write(self.style.MIGRATE_HEADING("  Django Tenant Options Configuration Validation"))
         self.stdout.write("=" * 70 + "\n")
 
         # Check all Option subclasses
@@ -39,9 +35,7 @@ class Command(BaseCommand):
         option_models = all_option_subclasses()
 
         if not option_models:
-            warnings.append(
-                "No Option models found. Have you created any concrete Option subclasses?"
-            )
+            warnings.append("No Option models found. Have you created any concrete Option subclasses?")
         else:
             self.stdout.write(f"Found {len(option_models)} Option model(s)\n")
 
@@ -53,9 +47,7 @@ class Command(BaseCommand):
         selection_models = all_selection_subclasses()
 
         if not selection_models:
-            warnings.append(
-                "No Selection models found. Have you created any concrete Selection subclasses?"
-            )
+            warnings.append("No Selection models found. Have you created any concrete Selection subclasses?")
         else:
             self.stdout.write(f"Found {len(selection_models)} Selection model(s)\n")
 
@@ -78,11 +70,7 @@ class Command(BaseCommand):
 
         if not errors and not warnings:
             self.stdout.write(self.style.SUCCESS("\nAll validations passed!"))
-            self.stdout.write(
-                self.style.SUCCESS(
-                    "\nYour django-tenant-options configuration is properly set up."
-                )
-            )
+            self.stdout.write(self.style.SUCCESS("\nYour django-tenant-options configuration is properly set up."))
 
         self.stdout.write("\n" + "=" * 70 + "\n")
 
@@ -104,7 +92,7 @@ class Command(BaseCommand):
                     f"{model.__name__}: Manager 'objects' doesn't inherit from OptionManager. "
                     f"Filtering may not work as expected."
                 )
-            self.stdout.write(f"    Manager configured")
+            self.stdout.write("    Manager configured")
 
         # Validate selection_model is set
         if not hasattr(model, "selection_model") or not model.selection_model:
@@ -159,28 +147,20 @@ class Command(BaseCommand):
                     "This may cause unexpected behavior."
                 )
         except Exception as e:  # pylint: disable=W0718
-            warnings.append(
-                f"{model.__name__}: Could not check for duplicates in database: {str(e)}"
-            )
+            warnings.append(f"{model.__name__}: Could not check for duplicates in database: {str(e)}")
 
         # Validate Meta inheritance by checking for expected constraints
         constraint_names = [
-            c.name
-            % {"app_label": model._meta.app_label, "class": model._meta.model_name}
+            c.name % {"app_label": model._meta.app_label, "class": model._meta.model_name}
             for c in model._meta.constraints
         ]
 
-        expected_unique = (
-            f"{model._meta.app_label}_{model._meta.model_name}_unique_name"
-        )
-        expected_check = (
-            f"{model._meta.app_label}_{model._meta.model_name}_tenant_check"
-        )
+        expected_unique = f"{model._meta.app_label}_{model._meta.model_name}_unique_name"
+        expected_check = f"{model._meta.app_label}_{model._meta.model_name}_tenant_check"
 
         if expected_unique not in constraint_names:
             warnings.append(
-                f"{model.__name__}: Missing unique name constraint. "
-                "Ensure Meta class inherits from AbstractOption.Meta"
+                f"{model.__name__}: Missing unique name constraint. Ensure Meta class inherits from AbstractOption.Meta"
             )
 
         if expected_check not in constraint_names:
@@ -190,7 +170,7 @@ class Command(BaseCommand):
             )
 
         if expected_unique in constraint_names and expected_check in constraint_names:
-            self.stdout.write(f"    Database constraints properly configured")
+            self.stdout.write("    Database constraints properly configured")
 
     def _validate_selection_model(self, model, errors, warnings):
         """Validate a single Selection model."""
@@ -206,7 +186,7 @@ class Command(BaseCommand):
                     f"{model.__name__}: Manager 'objects' doesn't inherit from SelectionManager. "
                     f"Filtering may not work as expected."
                 )
-            self.stdout.write(f"    Manager configured")
+            self.stdout.write("    Manager configured")
 
         # Validate option_model is set
         if not hasattr(model, "option_model") or not model.option_model:
@@ -225,10 +205,8 @@ class Command(BaseCommand):
             if hasattr(model, "objects") and hasattr(model, "option_model"):
                 from django.apps import apps
 
-                OptionModel = apps.get_model(model.option_model)  # pylint: disable=C0103
-                orphaned = model.objects.filter(
-                    option__deleted__isnull=False, deleted__isnull=True
-                ).count()
+                _OptionModel = apps.get_model(model.option_model)  # noqa: F841
+                orphaned = model.objects.filter(option__deleted__isnull=False, deleted__isnull=True).count()
 
                 if orphaned > 0:
                     warnings.append(
@@ -236,28 +214,19 @@ class Command(BaseCommand):
                         "Consider running data cleanup."
                     )
                 else:
-                    self.stdout.write(f"    No orphaned selections found")
+                    self.stdout.write("    No orphaned selections found")
         except Exception as e:  # pylint: disable=W0718
-            warnings.append(
-                f"{model.__name__}: Could not check for orphaned selections: {str(e)}"
-            )
+            warnings.append(f"{model.__name__}: Could not check for orphaned selections: {str(e)}")
 
         # Validate Meta inheritance by checking for expected constraints
         constraint_names = [
-            c.name
-            % {"app_label": model._meta.app_label, "class": model._meta.model_name}
+            c.name % {"app_label": model._meta.app_label, "class": model._meta.model_name}
             for c in model._meta.constraints
         ]
 
-        expected_option_check = (
-            f"{model._meta.app_label}_{model._meta.model_name}_option_not_null"
-        )
-        expected_tenant_check = (
-            f"{model._meta.app_label}_{model._meta.model_name}_tenant_not_null"
-        )
-        expected_unique = (
-            f"{model._meta.app_label}_{model._meta.model_name}_unique_active_selection"
-        )
+        expected_option_check = f"{model._meta.app_label}_{model._meta.model_name}_option_not_null"
+        expected_tenant_check = f"{model._meta.app_label}_{model._meta.model_name}_tenant_not_null"
+        expected_unique = f"{model._meta.app_label}_{model._meta.model_name}_unique_active_selection"
 
         missing_constraints = []
         if expected_option_check not in constraint_names:
@@ -273,4 +242,4 @@ class Command(BaseCommand):
                 "Ensure Meta class inherits from AbstractSelection.Meta"
             )
         else:
-            self.stdout.write(f"    Database constraints properly configured")
+            self.stdout.write("    Database constraints properly configured")

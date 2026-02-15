@@ -1,4 +1,5 @@
 """Models for the example app."""
+
 import auto_prefetch
 from django.contrib.auth import get_user_model
 from django.db import models
