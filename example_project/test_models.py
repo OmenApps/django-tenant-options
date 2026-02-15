@@ -822,3 +822,153 @@ class TestOptionManagerMethods:
         # Verify all default options exist exactly once
         for name in TaskPriorityOption.default_options:
             assert TaskPriorityOption.objects.filter(name=name).count() == 1
+
+
+@pytest.mark.django_db
+class TestOptionQuerySetHardDelete:
+    """Test cases for OptionQuerySet hard delete (override=True)."""
+
+    def test_queryset_hard_delete(self):
+        """Test hard delete via queryset with override=True."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-qs-hd")
+        options = [
+            TaskPriorityOption.objects.create(name=f"HD Option {i}", option_type=OptionType.CUSTOM, tenant=tenant)
+            for i in range(3)
+        ]
+        ids = [o.id for o in options]
+
+        result = TaskPriorityOption.objects.filter(id__in=ids).delete(override=True)
+        # Hard delete returns a tuple (count, details_dict)
+        assert result[0] >= 3
+        assert not TaskPriorityOption.objects.filter(id__in=ids).exists()
+
+    def test_queryset_soft_delete_default(self):
+        """Test that queryset.delete() without override performs soft delete."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-qs-sd")
+        option = TaskPriorityOption.objects.create(name="SD Option", option_type=OptionType.CUSTOM, tenant=tenant)
+        TaskPriorityOption.objects.filter(id=option.id).delete()
+        option.refresh_from_db()
+        assert option.deleted is not None
+
+
+@pytest.mark.django_db
+class TestSelectionQuerySetHardDelete:
+    """Test cases for SelectionQuerySet hard delete (override=True)."""
+
+    def test_queryset_hard_delete(self):
+        """Test hard delete via selection queryset with override=True."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-sel-hd")
+        options = [
+            TaskPriorityOption.objects.create(name=f"Sel HD Opt {i}", option_type=OptionType.CUSTOM, tenant=tenant)
+            for i in range(3)
+        ]
+        selections = [TaskPrioritySelection.objects.create(tenant=tenant, option=opt) for opt in options]
+        sel_ids = [s.id for s in selections]
+
+        result = TaskPrioritySelection.objects.filter(id__in=sel_ids).delete(override=True)
+        assert result[0] >= 3
+        assert not TaskPrioritySelection.objects.filter(id__in=sel_ids).exists()
+
+
+@pytest.mark.django_db
+class TestSelectedOptionsForTenantIncludeDeleted:
+    """Test selected_options_for_tenant with include_deleted=True."""
+
+    def test_include_deleted_returns_deleted_options(self):
+        """Test that include_deleted=True returns soft-deleted options."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-incl-del")
+        option = TaskPriorityOption.objects.create(name="Deletable Option", option_type=OptionType.OPTIONAL)
+        TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        # Soft-delete the option
+        option.delete()
+
+        # Without include_deleted, should not appear
+        selected = TaskPriorityOption.objects.selected_options_for_tenant(tenant)
+        assert option not in selected
+
+        # With include_deleted=True, should appear
+        selected_with_deleted = TaskPriorityOption.objects.selected_options_for_tenant(tenant, include_deleted=True)
+        assert option in selected_with_deleted
+
+
+@pytest.mark.django_db
+class TestSelectionCleanEdgeCases:
+    """Test Selection clean() edge cases."""
+
+    def test_clean_missing_option_id(self):
+        """Test that creating a selection without option raises an error.
+
+        Since the option FK is NOT NULL, accessing self.option when option_id is None
+        raises RelatedObjectDoesNotExist (a subclass of AttributeError/DoesNotExist).
+        The debug logging in clean() triggers this before the explicit check.
+        """
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-no-opt")
+        selection = TaskPrioritySelection()
+        selection.tenant = tenant
+
+        # Accessing the non-nullable FK descriptor when option_id is None raises
+        with pytest.raises(Exception):
+            selection.clean()
+
+    def test_clean_missing_tenant_id(self):
+        """Test that creating a selection without tenant raises an error.
+
+        Since the tenant FK is created without null=True in many configurations,
+        accessing self.tenant when tenant_id is None raises RelatedObjectDoesNotExist.
+        """
+        option = TaskPriorityOption.objects.create(name="No Tenant Option", option_type=OptionType.MANDATORY)
+        selection = TaskPrioritySelection()
+        selection.option = option
+
+        with pytest.raises(Exception):
+            selection.clean()
+
+    def test_clean_with_deleted_option_fk(self):
+        """Test clean() raises ValidationError for deleted FK reference."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-del-fk")
+        option = TaskPriorityOption.objects.create(name="Will Delete FK", option_type=OptionType.CUSTOM, tenant=tenant)
+        selection = TaskPrioritySelection()
+        selection.tenant = tenant
+        selection.option = option
+
+        # Soft-delete the option
+        option.delete()
+
+        with pytest.raises(ValidationError, match="Cannot select deleted option"):
+            selection.clean()
+
+
+@pytest.mark.django_db
+class TestSelectionHardDelete:
+    """Test Selection instance hard delete with override=True."""
+
+    def test_selection_instance_hard_delete(self):
+        """Test hard deleting a single selection instance with override=True."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-sel-inst-hd")
+        option = TaskPriorityOption.objects.create(
+            name="Hard Del Sel Opt", option_type=OptionType.CUSTOM, tenant=tenant
+        )
+        selection = TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        sel_id = selection.id
+
+        selection.delete(override=True)
+        assert not TaskPrioritySelection.objects.filter(id=sel_id).exists()
+
+
+@pytest.mark.django_db
+class TestOptionDeleteExceptionHandling:
+    """Test option delete exception handling paths."""
+
+    def test_delete_raises_on_error(self, monkeypatch):
+        """Test that delete re-raises exceptions after logging."""
+        tenant = Tenant.objects.create(name="Test Tenant", subdomain="test-del-exc")
+        option = TaskPriorityOption.objects.create(name="Error Del Opt", option_type=OptionType.CUSTOM, tenant=tenant)
+
+        # Monkeypatch save to raise
+        def failing_save(*args, **kwargs):
+            raise RuntimeError("Save failed")
+
+        monkeypatch.setattr(option, "save", failing_save)
+
+        with pytest.raises(RuntimeError, match="Save failed"):
+            option.delete()

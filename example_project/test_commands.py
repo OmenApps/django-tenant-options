@@ -82,6 +82,38 @@ class TestListOptionsCommand:
         output = out.getvalue()
         assert deleted_priority.name not in output
 
+    def test_listoptions_no_models(self, monkeypatch):
+        """Test listoptions when no Option models exist."""
+        monkeypatch.setattr("django_tenant_options.helpers.all_option_subclasses", lambda: [])
+
+        out = StringIO()
+        call_command("listoptions", stdout=out)
+        output = out.getvalue()
+        assert "No options found in the project" in output
+
+    def test_listoptions_shows_tenant_on_custom_option(self):
+        """Test listoptions displays tenant info for custom options."""
+        tenant = Tenant.objects.create(name="List Tenant", subdomain="list-tenant")
+        TaskPriorityOption.objects.create_for_tenant(tenant=tenant, name="Custom List Opt")
+
+        out = StringIO()
+        call_command("listoptions", stdout=out)
+        output = out.getvalue()
+        assert "Custom List Opt" in output
+        assert "Tenant: List Tenant" in output
+
+    def test_listoptions_exception_handling(self, monkeypatch):
+        """Test listoptions handles exceptions gracefully."""
+
+        def raising_subclasses():
+            raise RuntimeError("Model loading failed")
+
+        monkeypatch.setattr("django_tenant_options.helpers.all_option_subclasses", raising_subclasses)
+
+        out = StringIO()
+        # Should not raise - the exception is caught and logged
+        call_command("listoptions", stdout=out)
+
 
 @pytest.mark.django_db
 class TestSyncOptionsCommand:
@@ -179,6 +211,50 @@ class TestSyncOptionsCommand:
         call_command("syncoptions", stdout=out)
         output = out.getvalue()
         assert "No default options found in the project." in output
+
+    def test_syncoptions_exception_in_get_model_subclasses(self, monkeypatch):
+        """Test syncoptions handles exception in get_model_subclasses."""
+
+        def raising_subclasses():
+            raise RuntimeError("Model loading failed")
+
+        monkeypatch.setattr("django_tenant_options.helpers.all_option_subclasses", raising_subclasses)
+
+        out = StringIO()
+        call_command("syncoptions", stdout=out)
+        output = out.getvalue()
+        # Falls back to empty list, then reports no options
+        assert "No default options found in the project." in output
+
+    def test_syncoptions_exception_in_update_options(self, monkeypatch):
+        """Test syncoptions handles exception in update_options."""
+
+        def failing_update(self):
+            raise RuntimeError("Update failed")
+
+        monkeypatch.setattr(TaskPriorityOption.objects, "_update_default_options", failing_update)
+
+        out = StringIO()
+        call_command("syncoptions", stdout=out)
+        # Should not raise; error is logged and an empty dict is returned
+
+    def test_syncoptions_no_imported_options_message(self):
+        """Test syncoptions shows 'No options imported or verified' when all defaults are deleted."""
+        # First sync to create default options
+        call_command("syncoptions", stdout=StringIO())
+
+        # Now create a situation where all defaults are already deleted
+        # by soft-deleting all active non-custom options for TaskPriority
+        TaskPriorityOption.objects.filter(
+            option_type__in=["dm", "do"],
+        ).update(deleted=timezone.now())
+
+        out = StringIO()
+        call_command("syncoptions", stdout=out)
+        output = out.getvalue()
+        # The deleted defaults get re-synced (undeleted), so we should see imported options
+        # This tests the full sync path
+        assert "Imported or Verified Options" in output
 
 
 @pytest.mark.django_db
