@@ -40,7 +40,7 @@ COPY pyproject.toml uv.lock requirements.txt ${APP_HOME}/
 
 # Copy remaining project files
 COPY noxfile.py manage.py ${APP_HOME}
-COPY .darglint .editorconfig .flake8 .gitignore .pre-commit-config.yaml .prettierignore .readthedocs.yml bandit.yml ${APP_HOME}
+COPY .editorconfig .gitignore .pre-commit-config.yaml .readthedocs.yml bandit.yml ${APP_HOME}
 COPY CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md LICENSE README.md ${APP_HOME}
 COPY ./docs/ ${APP_HOME}/docs
 COPY ./example_project/ ${APP_HOME}/example_project/
@@ -58,6 +58,9 @@ RUN chmod +x /entrypoint
 COPY ./compose/django/start /start
 RUN sed -i 's/\r$//g' /start
 RUN chmod +x /start
+
+# Generate example project migrations for the installed Django version
+RUN python manage.py makemigrations --no-input
 
 # Initialize git and add .
 RUN git init
