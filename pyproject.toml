@@ -38,27 +38,20 @@ Repository = "https://github.com/OmenApps/django-tenant-options"
 Documentation = "https://django-tenant-options.readthedocs.io"
 Changelog = "https://github.com/OmenApps/django-tenant-options/releases"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "bandit>=1.7.8",
-    "black>=24.4.2",
     "click~=8.1",
     "coverage[toml]>=7.6.1",
     "crispy-bootstrap5~=2024.10",
-    "darglint>=1.8.1",
     "django-anymail~=12.0",
     "django-auto-prefetch>=1.11.0",
     "django-crispy-forms~=2.3",
-    "flake8-bugbear>=24.4.26",
-    "flake8-docstrings>=1.7.0",
-    "flake8-rst-docstrings>=0.3.0",
-    "flake8==7.0.0",
     "furo>=2024.8.6",
-    "isort>=5.13.2",
     "linkify-it-py==2.0.3",
     "myst-parser>=4.0.0",
-    "nox>=2024.4.15",
-    "pep8-naming>=0.14.1",
+    "nox>=2025.2.9",
+    "pip-audit>=2.7.0",
     "pre-commit-hooks>=4.6.0",
     "pre-commit>=3.7.1",
     "psycopg2-binary>=2.9.9",
@@ -67,8 +60,9 @@ dev-dependencies = [
     "pytest-django>=4.9.0",
     "pytest>=8.3.3",
     "python-environ~=0.4",
+    "pyright>=1.1.400",
     "pyupgrade>=3.15.2",
-    "safety>=3.2.0",
+    "ruff>=0.8.0",
     "sphinx-autobuild>=2024.4.16",
     "sphinx-click>=6.0.0",
     "sphinx>=8.0.2",
@@ -77,15 +71,6 @@ dev-dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.black]
-line-length = 120
-target-version = ["py311", "py311", "py312", "py313", "py314"]
-force-exclude = '''
-(
-  .nox
-)
-'''
 
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]
@@ -106,8 +91,16 @@ python_files = ["*test_*.py", "*_test.py", "example_project/*.py"]
 log_cli = true
 log_cli_level = "INFO"
 
-[tool.isort]
-profile = "black"
-force_single_line = true
-lines_after_imports = 2
-extend_skip = [".nox"]
+[tool.ruff]
+src = ["src"]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["django_tenant_options"]
+force-single-line = true
+lines-after-imports = 2

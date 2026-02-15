@@ -1,4 +1,5 @@
 """Nox sessions."""
+
 import os
 import shlex
 import shutil
@@ -28,10 +29,10 @@ PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 
 PACKAGE = "django_tenant_options"
 
-nox.needs_version = ">= 2024.4.15"
+nox.needs_version = ">= 2025.2.9"
 nox.options.sessions = (
     "pre-commit",
-    "safety",
+    "pip-audit",
     "tests",
     "xdoctest",
     "docs-build",
@@ -55,8 +56,7 @@ def activate_virtualenv_in_precommit_hooks(session: Session) -> None:
     # quoting rules for Python and bash, but strip the outermost quotes so we
     # can detect paths within the bindir, like <bindir>/python.
     bindirs = [
-        bindir[1:-1] if bindir[0] in "'\"" else bindir
-        for bindir in (repr(session.bin), shlex.quote(session.bin))
+        bindir[1:-1] if bindir[0] in "'\"" else bindir for bindir in (repr(session.bin), shlex.quote(session.bin))
     ]
 
     virtualenv = session.env.get("VIRTUAL_ENV")
@@ -98,10 +98,7 @@ def activate_virtualenv_in_precommit_hooks(session: Session) -> None:
 
         text = hook.read_text()
 
-        if not any(
-            Path("A") == Path("a") and bindir.lower() in text.lower() or bindir in text
-            for bindir in bindirs
-        ):
+        if not any(Path("A") == Path("a") and bindir.lower() in text.lower() or bindir in text for bindir in bindirs):
             continue
 
         lines = text.splitlines()
@@ -120,42 +117,42 @@ def precommit(session: Session, django: str) -> None:
     args = session.posargs or [
         "run",
         "--all-files",
-        "--hook-stage=manual",
         "--show-diff-on-failure",
     ]
     session.install(
         "bandit",
-        "black",
-        "darglint",
-        "flake8",
-        "flake8-bugbear",
-        "flake8-docstrings",
-        "flake8-rst-docstrings",
-        "isort",
-        "pep8-naming",
         "pre-commit",
-        "pre-commit-hooks",
-        "pyupgrade",
+        "ruff",
     )
     session.run("pre-commit", *args)
     if args and args[0] == "install":
         activate_virtualenv_in_precommit_hooks(session)
 
 
-@session(python=PYTHON_STABLE_VERSION)
+@session(name="pip-audit", python=PYTHON_STABLE_VERSION)
 @nox.parametrize("django", DJANGO_STABLE_VERSION)
-def safety(session: Session, django: str) -> None:
+def pip_audit(session: Session, django: str) -> None:
     """Scan dependencies for insecure packages."""
-    requirements = session.posargs or ["requirements.txt"]
-    session.install("safety")
-    session.run("safety", "check", "--full-report", f"--file={requirements}")
+    session.install("pip-audit", ".")
+    session.run("pip-audit")
 
 
 @session(python=PYTHON_VERSIONS)
 @nox.parametrize("django", DJANGO_VERSIONS)
 def tests(session: Session, django: str) -> None:
     """Run the test suite."""
-    session.run("uv", "sync", "--prerelease=allow", "--extra=dev")
+    pyproject = nox.project.load_toml("pyproject.toml")
+    deps = nox.project.dependency_groups(pyproject, "dev")
+    session.install("-e", ".", *deps)
+    session.install(f"django~={django}.0")
+
+    # Remove any stale example project migrations so makemigrations generates
+    # them with syntax compatible with the Django version under test.
+    for migrations_dir in Path("example_project").glob("*/migrations"):
+        for migration in migrations_dir.glob("[0-9]*.py"):
+            migration.unlink()
+
+    session.run("python", "manage.py", "makemigrations", "--no-input")
     try:
         session.run("coverage", "run", "-m", "pytest", "-vv", *session.posargs)
     finally:

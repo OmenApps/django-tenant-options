@@ -12,9 +12,9 @@ Here is a list of important resources for contributors:
 - [Code of Conduct]
 
 [mit license]: https://opensource.org/licenses/MIT
-[source code]: https://github.com/jacklinke/django-tenant-options
+[source code]: https://github.com/OmenApps/django-tenant-options
 [documentation]: https://django-tenant-options.readthedocs.io/
-[issue tracker]: https://github.com/jacklinke/django-tenant-options/issues
+[issue tracker]: https://github.com/OmenApps/django-tenant-options/issues
 
 ## How to report a bug
 
@@ -37,55 +37,99 @@ Request features on the [Issue Tracker].
 
 ## How to set up your development environment
 
-You need Python 3.9+ and the following tools:
+You need Python 3.11+ and the following tools:
 
-- [Poetry]
+- [uv]
 - [Nox]
-- [nox-poetry]
 
 Install the package with development requirements:
 
 ```console
-$ poetry install
+$ uv sync --extra=dev
 ```
 
-You can now run an interactive Python session,
-or the command-line interface:
+[uv]: https://docs.astral.sh/uv/
+[nox]: https://nox.thea.codes/
+
+## Running the example project
+
+The repository includes an example project that demonstrates the package's functionality:
 
 ```console
-$ poetry run python
-$ poetry run django-tenant-options
+$ uv run python manage.py makemigrations
+$ uv run python manage.py migrate
+$ uv run python manage.py loaddata testdata
+$ uv run python manage.py syncoptions
+$ uv run python manage.py runserver
 ```
 
-[poetry]: https://python-poetry.org/
-[nox]: https://nox.thea.codes/
-[nox-poetry]: https://nox-poetry.readthedocs.io/
+Log in via the admin at `http://127.0.0.1:8000/admin/` (username: `admin`, password: `pass`), then access the example project at `http://127.0.0.1:8000/`.
 
 ## How to test the project
 
 Run the full test suite:
 
 ```console
-$ nox
+$ uv run nox -s tests
+```
+
+Run tests with specific Python and Django versions:
+
+```console
+$ uv run nox -s tests -- python="3.12" django="5.1"
+```
+
+Run a specific test file:
+
+```console
+$ uv run nox -s tests -- example_project/test_models.py
+```
+
+Run tests directly with pytest and coverage:
+
+```console
+$ uv run coverage run -m pytest -vv
+$ uv run coverage report
 ```
 
 List the available Nox sessions:
 
 ```console
-$ nox --list-sessions
+$ uv run nox --list-sessions
 ```
 
-You can also run a specific Nox session.
-For example, invoke the unit test suite like this:
+## Code quality
+
+Run all pre-commit hooks:
 
 ```console
-$ nox --session=tests
+$ uv run nox -s pre-commit -- run --all-files
 ```
 
-Unit tests are located in the _tests_ directory,
-and are written using the [pytest] testing framework.
+The project uses:
 
-[pytest]: https://pytest.readthedocs.io/
+- **ruff** for formatting and linting (120 character line length)
+- **bandit** for security checks
+
+Install pre-commit hooks to run checks automatically on each commit:
+
+```console
+$ uv run nox -s pre-commit -- install
+```
+
+## Building documentation
+
+Build docs once:
+
+```console
+$ uv run nox -s docs-build
+```
+
+Build and serve with live reload:
+
+```console
+$ uv run nox -s docs
+```
 
 ## How to submit changes
 
@@ -94,21 +138,40 @@ Open a [pull request] to submit changes to this project.
 Your pull request needs to meet the following guidelines for acceptance:
 
 - The Nox test suite must pass without errors and warnings.
-- Include unit tests. This project maintains 100% code coverage.
+- Include unit tests. This project maintains high code coverage.
 - If your changes add functionality, update the documentation accordingly.
 
-Feel free to submit early, though—we can always iterate on this.
-
-To run linting and code formatting checks before committing your change, you can install pre-commit as a Git hook by running the following command:
-
-```console
-$ nox --session=pre-commit -- install
-```
+Feel free to submit early, though -- we can always iterate on this.
 
 It is recommended to open an issue before starting work on anything.
 This will allow a chance to talk it over with the owners and validate your approach.
 
-[pull request]: https://github.com/jacklinke/django-tenant-options/pulls
+[pull request]: https://github.com/OmenApps/django-tenant-options/pulls
+
+## Common issues
+
+### Database trigger conflicts
+
+If you encounter trigger conflicts during development:
+
+```console
+$ uv run python manage.py maketriggers --force
+$ uv run python manage.py migrate
+```
+
+### Pre-commit hook failures
+
+```console
+$ uv run pre-commit run --all-files
+$ uv run pre-commit autoupdate
+```
+
+### Documentation build errors
+
+```console
+$ rm -rf docs/_build
+$ uv run nox -s docs-build
+```
 
 <!-- github-only -->
 

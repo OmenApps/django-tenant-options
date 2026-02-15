@@ -1,0 +1,11 @@
+{
+  "include": ["src"],
+  "exclude": ["**/__pycache__", ".nox", ".venv", "example_project", "docs"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "reportAttributeAccessIssue": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportOperatorIssue": "warning",
+  "venvPath": ".",
+  "venv": ".venv"
+}
