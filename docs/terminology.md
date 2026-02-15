@@ -1,37 +1,76 @@
-# Terminology and Definitions
+# Terminology
 
-## 1. Introduction
+A glossary of terms used throughout the `django-tenant-options` documentation.
 
-This document provides a glossary of terms used in the `django-tenant-options` documentation. It aims to clarify the terminology and definitions related to multi-tenant architecture, custom options, and related concepts.
+## Tenant
 
-## 2. Glossary
+An entity (organization, team, company, department) that uses your multi-tenant application. Each tenant has its own set of options and selections. `django-tenant-options` has no requirement for a particular tenant architecture -- the only requirement is that your project has a model representing tenants.
 
-### 2.1. Tenant
+## Option
 
-A tenant is an entity that uses a multi-tenant application. In the context of `django-tenant-options`, a tenant is an organization, group, or individual that has its own set of custom options. Each tenant can customize the available options to meet its specific requirements.
+A configurable choice that can appear in user-facing forms. Options are stored as model instances inheriting from `AbstractOption`.
 
-> 🟩 Note
->
-> `django-tenant-options` has no relation to or requirement for any specific tenant architecture or package, but it provides a framework for managing custom options within a multi-tenant application. The only requirement is that the application must have a model representing tenants.
+## Option Model
 
-### 2.2. Options
+A concrete Django model that inherits from `AbstractOption`. Stores all available options for a particular category (e.g., `TaskPriorityOption`). Paired with a Selection model.
 
-Options are settings or choices that can be configured within a multi-tenant application and used in user-facing forms. Options may be predefined by the application developer as default options or defined by tenants as custom options. Options can influence the behavior, appearance, or functionality of the application's forms.
+## Selection Model
 
-Options can be categorized into two main types: Default Options and Custom Options. All Options models must inherit from the `AbstractOption` model provided by `django-tenant-options`.
+A concrete Django model that inherits from `AbstractSelection`. Acts as a through model between Tenant and Option, recording which options each tenant has enabled. Paired with an Option model.
 
-#### 2.2.1. Default Options
+## Default Options
 
-Default options are predefined settings or choices provided by the application developer. These options serve as the baseline configuration for all tenants and can include mandatory options that must be used by all tenants, as well as optional choices that tenants can adopt or ignore.
+Options predefined by the application developer in the `default_options` dictionary on an Option model. These are synced to the database by running `syncoptions`. Default options are either Mandatory or Optional.
 
-#### 2.2.2. Custom Options
+## Custom Options
 
-Custom options are additional settings or choices that tenants can define and configure within a multi-tenant application. These options allow tenants to tailor the selectable values in user-facing forms to better suit their needs.
+Options created by individual tenants at runtime. Only visible to the tenant that created them. Always have `option_type = OptionType.CUSTOM`.
 
-### 2.3 Selections
+## OptionType
 
-Selections refer to the specific Options that tenants decide to use or activate for their user-facing forms. Tenants can choose from the available Default Options and Custom Options to create a unique set of Selections that will be presented to users in the application's forms.
+An enumeration defining the three kinds of options:
 
-Selections are stored in the database as model instances for models subclassed from `AbstractSelection`, which is provided by `django-tenant-options`. Each Selection is associated with a specific tenant and an Option, allowing the application to retrieve and apply the selected options when rendering forms.
+- **`OptionType.MANDATORY`** (database value: `"dm"`) -- Always available to all tenants. Cannot be disabled.
+- **`OptionType.OPTIONAL`** (database value: `"do"`) -- Available to all tenants, but each tenant chooses whether to enable it.
+- **`OptionType.CUSTOM`** (database value: `"cu"`) -- Created by a specific tenant, only visible to that tenant.
 
-The Selections model serves as a through model between the Tenant model and the Option model, allowing for a many-to-many relationship between tenants and their selected Options.
+## Selections
+
+The specific options that a tenant has chosen to enable. Mandatory options are always included automatically. Optional and custom options appear in a tenant's selections only when explicitly enabled.
+
+## Soft Delete
+
+A deletion strategy where records are not removed from the database. Instead, a `deleted` timestamp is set on the record. Soft-deleted options and selections are excluded from normal queries but remain in the database for data integrity (e.g., so existing ForeignKey references don't break).
+
+Use `.delete()` for soft delete and `.delete(override=True)` for hard (permanent) delete. Use `.undelete()` to restore.
+
+## Unscoped Manager
+
+A secondary manager (`unscoped`) available on every Option and Selection model that returns all records, including soft-deleted ones. The default `objects` manager excludes soft-deleted records.
+
+```python
+# Only active records
+TaskPriorityOption.objects.all()
+
+# All records, including deleted
+TaskPriorityOption.unscoped.all()
+```
+
+## Database Trigger
+
+An optional database-level enforcement mechanism generated by `maketriggers`. Triggers ensure tenant-option consistency directly in the database, catching issues that could bypass Django's ORM validation (e.g., direct SQL, race conditions).
+
+## `default_options`
+
+A dictionary defined on an Option model class that specifies the developer-provided default options. Each key is the option name, and each value is a configuration dictionary:
+
+```python
+default_options = {
+    "High": {},                                      # Defaults to MANDATORY
+    "Medium": {"option_type": OptionType.OPTIONAL},
+}
+```
+
+## `syncoptions`
+
+A management command that synchronizes the `default_options` definitions from your model code into database records. Must be run after migrations and whenever `default_options` change.

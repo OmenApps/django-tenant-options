@@ -97,7 +97,7 @@ Consider a scenario where your SaaS provides project management tools for busine
 
 > 🟩 Note
 >
-> See the [example project](https://django-tenant-options.readthedocs.io/en/latest/exampleproject.html) for the more detailed demonstration of how to set up a multi-tenant application with custom options using `django-tenant-options`.
+> See the [tutorial](https://django-tenant-options.readthedocs.io/en/latest/tutorial.html) for a step-by-step walkthrough of building a multi-tenant application with custom options using `django-tenant-options`.
 
 ### Existing Models
 

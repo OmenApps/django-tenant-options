@@ -1,12 +1,27 @@
 # Options Cookbook
 
-To help you get started, we have compiled a list of common data categories and their recommended types. These categories can be used as a reference when setting up your options in a multi-tenant application.
+A reference of recommended option type assignments across 23 industries. Use these tables as inspiration when designing your own `default_options` dictionaries.
 
-In general, for industry-standard categories or statuses, we recommend providing options as mandatory (always displayed in a tenant's user-facing form) or optional (each tenant can choose whether it is displayed to users as an option they can select). For categories or statuses that are specific to a tenant's business or organization, they can create custom options to meet their unique needs.
+## How to read these tables
 
-> 🟩 Note
->
-> "_Tenant-Specific Custom Option_" is a placeholder for custom options that are specific to a tenant's business or industry and are not part of the general recommendations.
+Each table shows a set of options for a specific domain, with a recommended type:
+
+- **Mandatory** -- Always available to all tenants. Use for industry-standard options that every tenant needs.
+- **Optional** -- Available to all tenants, but each tenant chooses whether to enable it. Use for common options that not every tenant needs.
+- **Tenant-Specific Custom Option** -- A placeholder representing options that individual tenants create for their own needs. Your tenants will create these at runtime.
+
+For example, if you're building an HR system, the "Job Titles" table below suggests making "Manager" mandatory (every org needs it), "Innovation Officer" optional (some orgs want it), and letting tenants create their own custom titles.
+
+These translate directly into `default_options` on your Option model:
+
+```python
+class JobTitleOption(AbstractOption):
+    default_options = {
+        "Manager": {},                                        # Mandatory
+        "Innovation Officer": {"option_type": OptionType.OPTIONAL},
+    }
+    # Tenant-specific options are created at runtime, not in default_options
+```
 
 ## Accounting
 
@@ -41,7 +56,6 @@ In general, for industry-standard categories or statuses, we recommend providing
 | Travel expenses          | Optional                      |
 | Marketing expenses       | Optional                      |
 | Gifts and donations      | Optional                      |
-| Bribery expenses         | Tenant-Specific Custom Option |
 | Ice cream expenses       | Tenant-Specific Custom Option |
 
 ### Financial Statement Types
@@ -58,8 +72,7 @@ In general, for industry-standard categories or statuses, we recommend providing
 | Fund flow statement               | Optional                      |
 | Management accounts               | Optional                      |
 | Budgetary control statement       | Optional                      |
-| Bribe summary statement           | Tenant-Specific Custom Option |
-| Slush fund statement              | Tenant-Specific Custom Option |
+| Departmental budget report        | Tenant-Specific Custom Option |
 
 ## Agriculture - Crop Types
 
@@ -624,3 +637,9 @@ In general, for industry-standard categories or statuses, we recommend providing
 | Powerline networking | Optional                      |
 | Quantum network      | Tenant-Specific Custom Option |
 | Gossip network       | Tenant-Specific Custom Option |
+
+---
+
+These examples cover a broad range of industries, but every SaaS application has its own domain-specific needs. Use these tables as a starting point, then adapt the categories and type assignments to match your users' workflows.
+
+Ready to implement? See the [Tutorial](tutorial.md) to build a working application, or the [Models Guide](models.md) to configure your `default_options`.

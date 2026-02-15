@@ -148,7 +148,7 @@ def project_django_models(app, what, name, obj, options, lines):  # pylint: disa
 
                 # Add the field's type to the docstring
                 lines.append(f":type {field.attname}: {field.__class__.__name__}")
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # Return the extended docstring

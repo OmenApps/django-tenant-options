@@ -1,4 +1,6 @@
-# Reference
+# API Reference
+
+Auto-generated reference documentation from source code. For a guided walkthrough of settings, see [Configuration Reference](configuration.md).
 
 ## django_tenant_options
 
@@ -32,6 +34,13 @@
 
 ```{eval-rst}
 .. automodule:: django_tenant_options.forms
+    :members:
+```
+
+## form_fields.py
+
+```{eval-rst}
+.. automodule:: django_tenant_options.form_fields
     :members:
 ```
 
@@ -77,6 +86,14 @@
 .. autoclass:: django_tenant_options.management.commands.syncoptions.Command
 ```
 
+### `validate_tenant_options`
+
+```{eval-rst}
+.. autoclass:: django_tenant_options.management.commands.validateoptions.Command
+```
+
+See [Commands](commands.md) for usage details and CI/CD integration.
+
 ### `maketriggers`
 
 ```{eval-rst}
@@ -112,7 +129,7 @@
 
 .. option:: --interactive
 
-    (`bool`) Prompt for confirmation before creating each migration.",
+    (`bool`) Prompt for confirmation before creating each migration.
 
 .. option:: --verbose
 
