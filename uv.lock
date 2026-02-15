@@ -390,7 +390,7 @@ wheels = [
 
 [[package]]
 name = "django-tenant-options"
-version = "2025.10.1"
+version = "2026.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "django" },
