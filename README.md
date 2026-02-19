@@ -1,24 +1,10 @@
 # django-tenant-options
 
-[![PyPI](https://img.shields.io/pypi/v/django-tenant-options.svg)][pypi status]
-[![Status](https://img.shields.io/pypi/status/django-tenant-options.svg)][pypi status]
-[![Python Version](https://img.shields.io/pypi/pyversions/django-tenant-options)][pypi status]
-[![License](https://img.shields.io/pypi/l/django-tenant-options)][license]
-
-[![Read the documentation at https://django-tenant-options.readthedocs.io/](https://img.shields.io/readthedocs/django-tenant-options/latest.svg?label=Read%20the%20Docs)][read the docs]
-[![Tests](https://github.com/OmenApps/django-tenant-options/actions/workflows/tests.yml/badge.svg)][tests]
-[![Codecov](https://codecov.io/gh/OmenApps/django-tenant-options/branch/main/graph/badge.svg)][codecov]
-
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)][pre-commit]
-[![Black](https://img.shields.io/badge/code%20style-black-000000.svg)][black]
-[![Published on Django Packages](https://img.shields.io/badge/Published%20on-Django%20Packages-0c3c26)](https://djangopackages.org/packages/p/django-tenant-options/)
-
-[pypi status]: https://pypi.org/project/django-tenant-options/
-[read the docs]: https://django-tenant-options.readthedocs.io/
-[tests]: https://github.com/jacklinke/django-tenant-options/actions?workflow=Tests
-[codecov]: https://app.codecov.io/gh/jacklinke/django-tenant-options
-[pre-commit]: https://github.com/pre-commit/pre-commit
-[black]: https://github.com/psf/black
+[![PyPI](https://img.shields.io/pypi/v/django-tenant-options)](https://pypi.org/project/django-tenant-options/)
+[![Python versions](https://img.shields.io/pypi/pyversions/django-tenant-options)](https://pypi.org/project/django-tenant-options/)
+[![Django versions](https://img.shields.io/pypi/djversions/django-tenant-options)](https://pypi.org/project/django-tenant-options/)
+[![Documentation](https://readthedocs.org/projects/django-tenant-options/badge/?version=latest)](https://django-tenant-options.readthedocs.io/en/latest/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 **Empowering Your SaaS Tenants with Custom Options and Sane Defaults**
 
