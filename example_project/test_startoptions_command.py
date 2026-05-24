@@ -103,9 +103,10 @@ class TestRenderAdminCode:
 
     def test_imports_base_admin_classes(self):
         """render_admin_imports provides the package base admin classes."""
-        code = scaffolding.render_admin_imports("example", "Priority")
+        code = scaffolding.render_admin_imports("example_project.example", "Priority")
         assert "from django_tenant_options.admin import BaseOptionsAdmin" in code
         assert "from django_tenant_options.admin import BaseSelectionsAdmin" in code
+        assert "from example_project.example.models import PriorityOption" in code
 
     def test_registers_option_and_selection(self):
         """The rendered admin registers both generated models."""
@@ -121,10 +122,11 @@ class TestRenderFormsCode:
 
     def test_imports_form_helpers(self):
         """render_forms_imports provides the package form helpers and django forms."""
-        code = scaffolding.render_forms_imports("example", "Priority")
+        code = scaffolding.render_forms_imports("example_project.example", "Priority")
         assert "from django import forms" in code
         assert "from django_tenant_options.forms import OptionCreateFormMixin" in code
         assert "from django_tenant_options.forms import SelectionsForm" in code
+        assert "from example_project.example.models import PriorityOption" in code
 
     def test_defines_selections_form(self):
         """The rendered forms define a SelectionsForm subclass with a Meta model."""
@@ -137,6 +139,10 @@ class TestRenderFormsCode:
         code = scaffolding.render_forms_code("Priority")
         assert "class PriorityOptionCreateForm(OptionCreateFormMixin, forms.ModelForm):" in code
         assert "model = PriorityOption" in code
+        # The create form must expose only the name field; the mixin manages
+        # option_type, tenant, and deleted so they must not be in fields.
+        assert 'fields = ["name"]' in code
+        assert 'fields = "__all__"' not in code
 
 
 class TestAppendCodeToFile:
@@ -275,6 +281,9 @@ class TestStartOptionsDryRun:
         assert "@admin.register(PriorityOption)" in output
         assert "class PriorityOptionAdmin(BaseOptionsAdmin):" in output
         assert "@admin.register(PrioritySelection)" in output
+        # Import must use the full importable module path, not just the app label.
+        assert "from example_project.example.models import PriorityOption" in output
+        assert "from example.models import" not in output
 
     def test_dry_run_with_forms_includes_forms_snippet(self):
         """Dry-run with --with-forms prints the forms."""
@@ -283,6 +292,9 @@ class TestStartOptionsDryRun:
         output = out.getvalue()
         assert "class PrioritySelectionsForm(SelectionsForm):" in output
         assert "class PriorityOptionCreateForm(OptionCreateFormMixin, forms.ModelForm):" in output
+        # Import must use the full importable module path, not just the app label.
+        assert "from example_project.example.models import PriorityOption" in output
+        assert "from example.models import" not in output
 
     def test_dry_run_without_flags_omits_admin_and_forms(self):
         """Dry-run without the optional flags omits admin and forms snippets."""
@@ -382,13 +394,17 @@ class TestGeneratedCodeIsValidPython:
     def test_admin_code_compiles(self):
         """Rendered admin source (imports + body) compiles."""
         code = (
-            scaffolding.render_admin_imports("example", "Priority") + "\n\n" + scaffolding.render_admin_code("Priority")
+            scaffolding.render_admin_imports("example_project.example", "Priority")
+            + "\n\n"
+            + scaffolding.render_admin_code("Priority")
         )
         compile(code, "<generated-admin>", "exec")
 
     def test_forms_code_compiles(self):
         """Rendered forms source (imports + body) compiles."""
         code = (
-            scaffolding.render_forms_imports("example", "Priority") + "\n\n" + scaffolding.render_forms_code("Priority")
+            scaffolding.render_forms_imports("example_project.example", "Priority")
+            + "\n\n"
+            + scaffolding.render_forms_code("Priority")
         )
         compile(code, "<generated-forms>", "exec")

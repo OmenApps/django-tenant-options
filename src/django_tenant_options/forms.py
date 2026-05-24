@@ -264,9 +264,12 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
 
     def _delete_removed_selections(self):
         """Delete any selections that were removed."""
+        from django_tenant_options.cache import safe_bump_version
+
         self.selection_model.objects.filter(
             tenant=self.tenant, option__in=self.removed_selections, deleted__isnull=True
         ).update(deleted=timezone.now())
+        safe_bump_version(self.option_model._meta.label)
 
     def _save_new_selections(self):
         """Create or update the selections that were added."""

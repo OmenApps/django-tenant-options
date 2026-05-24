@@ -1,6 +1,5 @@
 """Command to scaffold a concrete Option and Selection model pair."""
 
-import logging
 import os
 
 from django.apps import apps
@@ -9,9 +8,6 @@ from django.core.management.base import CommandError
 
 from django_tenant_options import scaffolding
 from django_tenant_options.app_settings import TENANT_MODEL
-
-
-logger = logging.getLogger("django_tenant_options")
 
 
 NEXT_STEPS_TEMPLATE = """
@@ -80,6 +76,10 @@ class Command(BaseCommand):
             raise CommandError(f"App label '{app_label}' was not found. Make sure it is in INSTALLED_APPS.") from exc
 
         app_path = app_config.path
+        # app_config.name is the full importable module path (e.g. "example_project.example"),
+        # while app_label is just the label (e.g. "example"). The importable path is required
+        # for generated admin/forms import statements; the label is used for model string refs.
+        models_module = app_config.name
         models_path = os.path.join(app_path, "models.py")
 
         self._check_for_conflicts(models_path, name, force)
@@ -88,12 +88,13 @@ class Command(BaseCommand):
         models_imports = scaffolding.render_models_imports()
 
         if dry_run:
-            self._handle_dry_run(app_label, name, models_imports, models_body, with_admin, with_forms)
+            self._handle_dry_run(app_label, models_module, name, models_imports, models_body, with_admin, with_forms)
             return
 
         self._handle_write(
             app_path=app_path,
             app_label=app_label,
+            models_module=models_module,
             name=name,
             models_path=models_path,
             models_imports=models_imports,
@@ -115,18 +116,18 @@ class Command(BaseCommand):
                     "Use --force to append anyway or choose a different name."
                 )
 
-    def _handle_dry_run(self, app_label, name, models_imports, models_body, with_admin, with_forms):
+    def _handle_dry_run(self, app_label, models_module, name, models_imports, models_body, with_admin, with_forms):
         """Print generated code and next steps without writing files."""
         self.stdout.write(self.style.NOTICE(f"# {app_label}/models.py"))
         self.stdout.write(models_imports)
         self.stdout.write(models_body)
         if with_admin:
             self.stdout.write(self.style.NOTICE(f"# {app_label}/admin.py"))
-            self.stdout.write(scaffolding.render_admin_imports(app_label, name))
+            self.stdout.write(scaffolding.render_admin_imports(models_module, name))
             self.stdout.write(scaffolding.render_admin_code(name))
         if with_forms:
             self.stdout.write(self.style.NOTICE(f"# {app_label}/forms.py"))
-            self.stdout.write(scaffolding.render_forms_imports(app_label, name))
+            self.stdout.write(scaffolding.render_forms_imports(models_module, name))
             self.stdout.write(scaffolding.render_forms_code(name))
         self.stdout.write(NEXT_STEPS_TEMPLATE.format(name=name, app_label=app_label))
 
@@ -134,6 +135,7 @@ class Command(BaseCommand):
         self,
         app_path,
         app_label,
+        models_module,
         name,
         models_path,
         models_imports,
@@ -149,7 +151,7 @@ class Command(BaseCommand):
             admin_path = os.path.join(app_path, "admin.py")
             scaffolding.append_code_to_file(
                 admin_path,
-                scaffolding.render_admin_imports(app_label, name),
+                scaffolding.render_admin_imports(models_module, name),
                 scaffolding.render_admin_code(name),
             )
             self.stdout.write(self.style.SUCCESS(f"Wrote admin registrations to {admin_path}"))
@@ -158,7 +160,7 @@ class Command(BaseCommand):
             forms_path = os.path.join(app_path, "forms.py")
             scaffolding.append_code_to_file(
                 forms_path,
-                scaffolding.render_forms_imports(app_label, name),
+                scaffolding.render_forms_imports(models_module, name),
                 scaffolding.render_forms_code(name),
             )
             self.stdout.write(self.style.SUCCESS(f"Wrote forms to {forms_path}"))

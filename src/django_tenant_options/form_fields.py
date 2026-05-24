@@ -1,14 +1,10 @@
 """Custom form fields for the django_tenant_options app."""
 
-import logging
-
 from django import forms
 from django.forms.models import ModelChoiceIterator
+from django.utils.translation import gettext_lazy as _
 
 from django_tenant_options.choices import OptionType
-
-
-logger = logging.getLogger("django_tenant_options")
 
 
 class OptionsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
@@ -74,7 +70,7 @@ class GroupedModelChoiceIterator(ModelChoiceIterator):
 
     def _iter_by_attribute(self, objects, group_by):
         """Group objects by an arbitrary attribute, bucketing empties under ``Uncategorized``."""
-        uncategorized_label = "Uncategorized"
+        uncategorized_label = str(_("Uncategorized"))
         buckets = {}
         for obj in objects:
             value = getattr(obj, group_by, "")

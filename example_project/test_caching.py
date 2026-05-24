@@ -225,6 +225,23 @@ class TestAvailableOptionsCaching:
             cached = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
         assert cached == uncached
 
+    def test_include_deleted_uses_separate_cache_key(self):
+        """include_deleted=True is cached independently from include_deleted=False."""
+        from example_project.example.models import TaskPriorityOption
+
+        tenant = self._seed()
+        optional = TaskPriorityOption.objects.filter(option_type=OptionType.OPTIONAL).first()
+        optional.delete()  # soft-delete one option
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("django_tenant_options.app_settings.CACHE_OPTIONS", True)
+            active = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            with_deleted = set(
+                TaskPriorityOption.objects.options_for_tenant(tenant, include_deleted=True).values_list("pk", flat=True)
+            )
+        assert optional.pk not in active
+        assert optional.pk in with_deleted
+
     def test_available_and_selected_keys_independent(self):
         """The 'available' and 'selected' kinds do not collide in the cache."""
         from example_project.example.models import TaskPriorityOption
@@ -376,6 +393,26 @@ class TestSoftDeleteInvalidation:
             after = set(TaskPriorityOption.objects.selected_options_for_tenant(tenant).values_list("pk", flat=True))
             assert custom.pk not in after
 
+    def test_hard_delete_invalidates_cached_available(self):
+        """Hard-deleting an option (post_delete) invalidates the cached available list."""
+        from example_project.example.models import TaskPriorityOption
+        from example_project.example.models import Tenant
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("django_tenant_options.app_settings.CACHE_OPTIONS", True)
+            tenant = Tenant.objects.create(name="HD", subdomain="hd")
+            keep = TaskPriorityOption.objects.create(name="Keep", option_type=OptionType.MANDATORY)
+            gone = TaskPriorityOption.objects.create(name="Gone", option_type=OptionType.CUSTOM, tenant=tenant)
+
+            before = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert gone.pk in before
+
+            gone.delete(override=True)  # hard delete -> post_delete signal
+
+            after = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert gone.pk not in after
+            assert keep.pk in after
+
 
 @pytest.mark.django_db
 class TestUserFacingFormCaching:
@@ -414,6 +451,102 @@ class TestUserFacingFormCaching:
             choice_pks = {opt.pk for opt in form.fields["priority"].queryset}
             assert mandatory.pk in choice_pks
             assert custom.pk in choice_pks
+
+
+@pytest.mark.django_db
+class TestInvalidationPaths:
+    """Verify invalidation fires on bulk QuerySet and SelectionsForm deselection paths."""
+
+    def setup_method(self):
+        """Clear the cache before each test."""
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_selectionsform_deselect_invalidates_cached_selected(self):
+        """SelectionsForm.save() invalidates the cache when an option is deselected."""
+        from example_project.example.forms import TaskPrioritySelectionForm
+        from example_project.example.models import TaskPriorityOption
+        from example_project.example.models import TaskPrioritySelection
+        from example_project.example.models import Tenant
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("django_tenant_options.app_settings.CACHE_OPTIONS", True)
+
+            tenant = Tenant.objects.create(name="T", subdomain="t")
+            mandatory = TaskPriorityOption.objects.create(name="Mandatory1", option_type=OptionType.MANDATORY)
+            optional = TaskPriorityOption.objects.create(name="Optional1", option_type=OptionType.OPTIONAL)
+
+            # Select the optional option so it appears in the selection list.
+            TaskPrioritySelection.objects.create(tenant=tenant, option=optional)
+
+            # Prime the cache - optional should be present.
+            before = set(TaskPriorityOption.objects.selected_options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk in before
+
+            # Submit the form with only the mandatory option selected (deselects optional).
+            form = TaskPrioritySelectionForm(
+                data={"selections": [str(mandatory.pk)]},
+                tenant=tenant,
+            )
+            assert form.is_valid(), form.errors
+            form.save()
+
+            # Cache must have been invalidated; optional should no longer appear.
+            after = set(TaskPriorityOption.objects.selected_options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk not in after
+            assert mandatory.pk in after
+
+    def test_queryset_soft_delete_invalidates(self):
+        """OptionQuerySet.delete() (soft-delete) invalidates the cached option list."""
+        from example_project.example.models import TaskPriorityOption
+        from example_project.example.models import Tenant
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("django_tenant_options.app_settings.CACHE_OPTIONS", True)
+
+            tenant = Tenant.objects.create(name="T", subdomain="t")
+            mandatory = TaskPriorityOption.objects.create(name="Mandatory1", option_type=OptionType.MANDATORY)
+            optional = TaskPriorityOption.objects.create(name="Optional1", option_type=OptionType.OPTIONAL)
+
+            # Prime the cache - both options should appear in available list.
+            before = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk in before
+            assert mandatory.pk in before
+
+            # Bulk soft-delete via QuerySet (fires no per-instance signals).
+            TaskPriorityOption.objects.filter(pk=optional.pk).delete()
+
+            # Cache must have been invalidated; optional should no longer appear.
+            after = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk not in after
+            assert mandatory.pk in after
+
+    def test_queryset_undelete_invalidates(self):
+        """OptionQuerySet.undelete() invalidates the cached option list."""
+        from example_project.example.models import TaskPriorityOption
+        from example_project.example.models import Tenant
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("django_tenant_options.app_settings.CACHE_OPTIONS", True)
+
+            tenant = Tenant.objects.create(name="T", subdomain="t")
+            TaskPriorityOption.objects.create(name="Mandatory1", option_type=OptionType.MANDATORY)
+            optional = TaskPriorityOption.objects.create(name="Optional1", option_type=OptionType.OPTIONAL)
+
+            # Soft-delete the optional option first (via instance delete, which fires signal).
+            optional.delete()
+
+            # Prime the cache - optional should not be present.
+            before = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk not in before
+
+            # Bulk undelete via QuerySet (fires no per-instance signals).
+            TaskPriorityOption.objects.deleted().filter(pk=optional.pk).undelete()
+
+            # Cache must have been invalidated; optional should reappear.
+            after = set(TaskPriorityOption.objects.options_for_tenant(tenant).values_list("pk", flat=True))
+            assert optional.pk in after
 
 
 @pytest.mark.django_db

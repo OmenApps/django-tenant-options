@@ -42,7 +42,7 @@ def get_version(option_model_label: str) -> int:
     cache = _get_cache()
     key = version_key(option_model_label)
     # add() only sets the value if the key is absent, avoiding clobbering a concurrent writer.
-    cache.add(key, 1, app_settings.CACHE_TIMEOUT)
+    cache.add(key, 1, None)
     version = cache.get(key, 1)
     return int(version)
 
@@ -60,7 +60,7 @@ def bump_version(option_model_label: str) -> int:
     except ValueError:
         # Key was missing or expired; start a fresh namespace at version 2 so any stale key
         # built against an implicit version 1 is no longer reachable.
-        cache.add(key, 2, app_settings.CACHE_TIMEOUT)
+        cache.add(key, 2, None)
         new_version = cache.get(key, 2)
     logger.debug("Bumped cache version for %s to %s", option_model_label, new_version)
     return int(new_version)
@@ -84,6 +84,20 @@ def make_key(
     """
     prefix = app_settings.CACHE_KEY_PREFIX
     return f"{prefix}:{option_model_label}:v{version}:t{tenant_pk}:{kind}:d{int(include_deleted)}"
+
+
+def safe_bump_version(option_model_label: str) -> None:
+    """Invalidate cached lists for an option model, resilient to cache-backend failure.
+
+    No-op when caching is disabled. Any cache-backend error is logged and swallowed so a
+    failed invalidation never breaks the write (save/delete) that triggered it.
+    """
+    if not caching_enabled():
+        return
+    try:
+        bump_version(option_model_label)
+    except Exception:  # pragma: no cover - cache backend failure must not break writes
+        logger.warning("Cache invalidation failed for %s", option_model_label, exc_info=True)
 
 
 def get_cached_option_pks(key: str):

@@ -178,6 +178,25 @@ class TestGroupByAttribute:
         assert grouped["B"] == ["Critical (optional)"]
         assert grouped["Uncategorized"] == ["Medium (optional)"]
 
+    def test_attribute_present_splits_groups_real_model(self):
+        """group_by='category' splits groups using a real DB-backed queryset on TagOption."""
+        from example_project.example.models import TagOption
+
+        TagOption.objects.create(name="Red", option_type=OptionType.OPTIONAL, category="colors")
+        TagOption.objects.create(name="Blue", option_type=OptionType.OPTIONAL, category="colors")
+        TagOption.objects.create(name="Dog", option_type=OptionType.OPTIONAL, category="animals")
+        TagOption.objects.create(name="Plain", option_type=OptionType.OPTIONAL)  # no category -> Uncategorized
+
+        field = GroupedOptionsModelMultipleChoiceField(
+            queryset=TagOption.objects.all().order_by("name"), group_by="category"
+        )
+        group_labels = [label for label, _ in field.choices]
+        assert group_labels == ["Uncategorized", "animals", "colors"]
+        grouped = {gl: [lbl for _, lbl in entries] for gl, entries in field.choices}
+        assert grouped["animals"] == ["Dog (optional)"]
+        assert sorted(grouped["colors"]) == ["Blue (optional)", "Red (optional)"]
+        assert grouped["Uncategorized"] == ["Plain (optional)"]
+
 
 @pytest.mark.django_db
 class TestGroupedRendering:

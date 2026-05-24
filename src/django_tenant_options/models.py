@@ -515,7 +515,11 @@ class OptionQuerySet(_QuerySetBase):
 
     def undelete(self):
         """Update all records in the current QuerySet to remove the deleted timestamp."""
-        return self.update(deleted=None)
+        from django_tenant_options.cache import safe_bump_version
+
+        result = self.update(deleted=None)
+        safe_bump_version(self.model._meta.label)
+        return result
 
     def delete(self, override=False):  # type: ignore[override]
         """Delete the records in the current QuerySet.
@@ -523,9 +527,15 @@ class OptionQuerySet(_QuerySetBase):
         Args:
             override: If True, perform a hard delete. Otherwise, perform a soft delete.
         """
+        from django_tenant_options.cache import safe_bump_version
+
         if override:
-            return super().delete()
-        return self.update(deleted=timezone.now())
+            result = super().delete()
+            safe_bump_version(self.model._meta.label)
+            return result
+        result = self.update(deleted=timezone.now())
+        safe_bump_version(self.model._meta.label)
+        return result
 
 
 class OptionManager(_ManagerBase):
@@ -965,7 +975,17 @@ class SelectionQuerySet(_QuerySetBase):
 
     def undelete(self):
         """Update all records in the current QuerySet to remove deleted timestamp."""
-        return self.update(deleted=None)
+        from django.apps import apps
+
+        from django_tenant_options.cache import safe_bump_version
+
+        result = self.update(deleted=None)
+        try:
+            option_label = apps.get_model(self.model.option_model)._meta.label
+            safe_bump_version(option_label)
+        except (LookupError, AttributeError):
+            pass
+        return result
 
     def delete(self, override=False):  # type: ignore[override]
         """Delete the records in the current QuerySet.
@@ -973,9 +993,25 @@ class SelectionQuerySet(_QuerySetBase):
         Args:
             override: If True, perform a hard delete. Otherwise, perform a soft delete.
         """
+        from django.apps import apps
+
+        from django_tenant_options.cache import safe_bump_version
+
         if override:
-            return super().delete()
-        return self.update(deleted=timezone.now())
+            result = super().delete()
+            try:
+                option_label = apps.get_model(self.model.option_model)._meta.label
+                safe_bump_version(option_label)
+            except (LookupError, AttributeError):
+                pass
+            return result
+        result = self.update(deleted=timezone.now())
+        try:
+            option_label = apps.get_model(self.model.option_model)._meta.label
+            safe_bump_version(option_label)
+        except (LookupError, AttributeError):
+            pass
+        return result
 
 
 class SelectionManager(_ManagerBase):

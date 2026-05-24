@@ -12,8 +12,8 @@ from django.apps import apps
 from django.db.models.signals import post_delete
 from django.db.models.signals import post_save
 
-from django_tenant_options.cache import bump_version
 from django_tenant_options.cache import caching_enabled
+from django_tenant_options.cache import safe_bump_version
 from django_tenant_options.helpers import all_option_subclasses
 from django_tenant_options.helpers import all_selection_subclasses
 
@@ -26,7 +26,7 @@ def _option_changed(sender, instance, **kwargs):
     if not caching_enabled():
         return
     label = type(instance)._meta.label
-    bump_version(label)
+    safe_bump_version(label)
 
 
 def _selection_changed(sender, instance, **kwargs):
@@ -37,9 +37,9 @@ def _selection_changed(sender, instance, **kwargs):
         option_model_str = type(instance).option_model
         option_label = apps.get_model(option_model_str)._meta.label
     except (LookupError, AttributeError):
-        logger.debug("Could not resolve option_model for selection %r; skipping cache bump", instance)
+        logger.warning("Could not resolve option_model for selection %r; skipping cache bump", instance)
         return
-    bump_version(option_label)
+    safe_bump_version(option_label)
 
 
 def connect_cache_signals() -> None:

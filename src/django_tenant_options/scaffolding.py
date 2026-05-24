@@ -5,11 +5,7 @@ filesystem helper append_code_to_file. The render_* functions return source
 strings so they can be unit-tested without touching the database or disk.
 """
 
-import logging
 import os
-
-
-logger = logging.getLogger("django_tenant_options")
 
 
 def validate_name(name):
@@ -119,11 +115,14 @@ def render_admin_code(name):
     )
 
 
-def render_admin_imports(app_label, name):
+def render_admin_imports(models_module, name):
     """Return the import lines required by render_admin_code output.
 
     Args:
-        app_label: The Django app label, for example "example".
+        models_module: The importable module path for the app's models, for
+            example "example_project.example" (app_config.name). This is used
+            to generate a correct ``from <models_module>.models import ...``
+            statement and must be the full dotted path, not just the app label.
         name: The PascalCase model base name, for example "Priority".
 
     Returns:
@@ -131,7 +130,8 @@ def render_admin_imports(app_label, name):
         the app's models module.
     """
     return (
-        ADMIN_IMPORTS + f"from {app_label}.models import {name}Option\nfrom {app_label}.models import {name}Selection\n"
+        ADMIN_IMPORTS
+        + f"from {models_module}.models import {name}Option\nfrom {models_module}.models import {name}Selection\n"
     )
 
 
@@ -170,15 +170,18 @@ def render_forms_code(name):
         f'        """Meta options for {name}OptionCreateForm."""\n'
         "\n"
         f"        model = {name}Option\n"
-        '        fields = "__all__"\n'
+        '        fields = ["name"]\n'
     )
 
 
-def render_forms_imports(app_label, name):
+def render_forms_imports(models_module, name):
     """Return the import lines required by render_forms_code output.
 
     Args:
-        app_label: The Django app label, for example "example".
+        models_module: The importable module path for the app's models, for
+            example "example_project.example" (app_config.name). This is used
+            to generate a correct ``from <models_module>.models import ...``
+            statement and must be the full dotted path, not just the app label.
         name: The PascalCase model base name, for example "Priority".
 
     Returns:
@@ -186,7 +189,8 @@ def render_forms_imports(app_label, name):
         the app's models module.
     """
     return (
-        FORMS_IMPORTS + f"from {app_label}.models import {name}Option\nfrom {app_label}.models import {name}Selection\n"
+        FORMS_IMPORTS
+        + f"from {models_module}.models import {name}Option\nfrom {models_module}.models import {name}Selection\n"
     )
 
 
