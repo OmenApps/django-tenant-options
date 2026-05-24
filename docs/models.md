@@ -68,6 +68,46 @@ class Meta(AbstractOption.Meta, auto_prefetch.Model.Meta):
 If your Meta class doesn't inherit from `AbstractOption.Meta`, you'll lose database constraints that protect data integrity. Django system checks (`W007`, `W008`) will warn you about this.
 ```
 
+## Adding metadata to options (optional)
+
+Options are minimal by default (a name and an option type). To make options
+self-documenting, orderable, and categorizable, mix in the optional
+`OptionMetadataMixin`. It adds four fields:
+
+- `description` - a `TextField` for longer descriptive text.
+- `help_text` - a `CharField` (max length 255) for short inline guidance.
+- `sort_order` - an indexed `IntegerField` (default `0`) for human-curated ordering.
+- `category` - a `CharField` (max length 100) for grouping options.
+
+The mixin is a plain abstract Django model, so it composes with `AbstractOption`
+regardless of your configured `MODEL_CLASS`. List the mixin first in the base
+class list, and set `ordering = ("sort_order", "name")` in your `Meta` so options
+are returned in a stable, curated order:
+
+```python
+from django_tenant_options.mixins import OptionMetadataMixin
+from django_tenant_options.models import AbstractOption
+
+
+class MyOption(OptionMetadataMixin, AbstractOption):
+    tenant_model = "myapp.Tenant"
+    selection_model = "myapp.MySelection"
+
+    class Meta(AbstractOption.Meta):
+        ordering = ("sort_order", "name")
+```
+
+Filter by category with the standard ORM:
+
+```python
+MyOption.objects.filter(category="colors")
+```
+
+Because the mixin only adds fields, it works alongside soft delete and every
+existing `OptionQuerySet` method (`active()`, `deleted()`, `custom_options()`,
+and so on). After adding the mixin to a model, create and apply a migration with
+`python manage.py makemigrations` and `python manage.py migrate`.
+
 ## Defining a Selection model
 
 Create a concrete Selection model by inheriting from `AbstractSelection`:

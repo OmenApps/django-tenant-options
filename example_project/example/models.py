@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 
 from django_tenant_options.choices import OptionType
+from django_tenant_options.mixins import OptionMetadataMixin
 from django_tenant_options.models import AbstractOption
 from django_tenant_options.models import AbstractSelection
 
@@ -128,3 +129,35 @@ class TaskStatusSelection(AbstractSelection):
 
         verbose_name = "Task Status Selection"
         verbose_name_plural = "Task Status Selections"
+
+
+class TagOption(OptionMetadataMixin, AbstractOption):
+    """Concrete Option demonstrating OptionMetadataMixin (description, help text, sort order, category)."""
+
+    tenant_model = "example.Tenant"
+    selection_model = "example.TagSelection"
+    default_options = {
+        "Urgent": {"option_type": OptionType.MANDATORY},
+        "Backend": {"option_type": OptionType.OPTIONAL},
+        "Frontend": {"option_type": OptionType.OPTIONAL},
+    }
+
+    class Meta(AbstractOption.Meta, auto_prefetch.Model.Meta):
+        """Meta class for TagOption."""
+
+        verbose_name = "Tag Option"
+        verbose_name_plural = "Tag Options"
+        ordering = ("sort_order", "name")
+
+
+class TagSelection(AbstractSelection):
+    """Concrete Selection for TagOption."""
+
+    tenant_model = "example.Tenant"
+    option_model = "example.TagOption"
+
+    class Meta(AbstractSelection.Meta, auto_prefetch.Model.Meta):
+        """Meta class for TagSelection."""
+
+        verbose_name = "Tag Selection"
+        verbose_name_plural = "Tag Selections"
