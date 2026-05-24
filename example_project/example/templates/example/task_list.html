@@ -1,42 +1,45 @@
-{% extends "example/base.html" %} {% block content %}
-<button
-  class="btn btn-sm btn-secondary"
-  onclick="window.location.href = '{% url 'example:home' %}';"
->
-  Home
-</button>
-<button
-  class="btn btn-sm btn-primary"
-  onclick="window.location.href = '{% url 'example:task_create' %}';"
->
-  Create Task
-</button>
-<br /><br />
-<div>
+{% extends "example/base.html" %}
+{% block title %}Task List{% endblock title %}
+{% block content %}
+<nav aria-label="Task actions" class="mb-3">
+  <a class="btn btn-sm btn-secondary" href="{% url 'example:home' %}">Home</a>
+  <a class="btn btn-sm btn-primary" href="{% url 'example:task_create' %}">Create Task</a>
+</nav>
+<aside aria-label="Current session">
   <ul>
     <li>Current User: {{ request.user }}</li>
     <li>Current Tenant: {{ request.user.tenant }}</li>
   </ul>
-</div>
-<div>
-  <legend>Task List</legend>
-  <dl class="row">
-    <dt class="col-sm-3">Selected Option Name</dt>
-    <dd class="col-sm-9">Details</dd>
-
+</aside>
+<h1>Task List</h1>
+<table class="table">
+  <caption class="visually-hidden">Tasks for the current tenant</caption>
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Task</th>
+      <th scope="col">Priority</th>
+      <th scope="col">Status</th>
+      <th scope="col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
     {% for task in tasks %}
-    <dt class="col-sm-3">{{ forloop.counter }} {{ task.title }}</dt>
-    <dd class="col-sm-9">
-      Priority: {{ task.priority }}; Status: {{ task.status }} {% if task.user == request.user %}
-      <button
-        class="btn btn-sm btn-primary"
-        onclick="window.location.href = '{% url 'example:task_update' task_id=task.id  %}';"
-      >
-        Update
-      </button>
-      {% endif %}
-    </dd>
+    <tr>
+      <th scope="row">{{ forloop.counter }}</th>
+      <td>{{ task.title }}</td>
+      <td>{{ task.priority }}</td>
+      <td>{{ task.status }}</td>
+      <td>
+        {% if task.user == request.user %}
+        <a class="btn btn-sm btn-primary"
+           href="{% url 'example:task_update' task_id=task.id %}">
+          Update<span class="visually-hidden"> {{ task.title }}</span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
     {% endfor %}
-  </dl>
-</div>
+  </tbody>
+</table>
 {% endblock content %}

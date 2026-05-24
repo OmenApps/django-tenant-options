@@ -1,21 +1,24 @@
-{% extends "example/base.html" %} {% block content %}
+{% extends "example/base.html" %}
+{% block title %}Home{% endblock title %}
+{% block content %}
 <h1>Home</h1>
-<div>
+<aside aria-label="Current session">
   <ul>
     <li>Current User: {{ request.user }}</li>
     <li>Current Tenant: {{ request.user.tenant }}</li>
   </ul>
-</div>
-<div>
-  The example project demonstrates the use of
-  <code>django-tenant-options</code> with a simple task management system.
-
-  <legend>URLs for the project:</legend>
+</aside>
+<section aria-labelledby="urls-heading">
+  <p>
+    The example project demonstrates the use of
+    <code>django-tenant-options</code> with a simple task management system.
+  </p>
+  <h2 id="urls-heading">URLs for the project</h2>
   <ul>
     <li><a href="{% url 'example:task_list' %}">Task List</a></li>
     <li><a href="{% url 'example:tenant_list' %}">Tenant List</a></li>
     <li><a href="{% url 'example:task_priority_list' %}">Task Priority</a></li>
     <li><a href="{% url 'example:task_status_list' %}">Task Status</a></li>
   </ul>
-</div>
+</section>
 {% endblock content %}

@@ -1,37 +1,39 @@
-{% extends "example/base.html" %} {% block content %}
-<button
-  class="btn btn-sm btn-secondary"
-  onclick="window.location.href = '{% url 'example:home' %}';"
->
-  Home
-</button>
-<button
-  class="btn btn-sm btn-primary"
-  onclick="window.location.href = '{% url 'example:tenant_create' %}';"
->
-  Create Tenant
-</button>
-<br /><br />
-<div>
+{% extends "example/base.html" %}
+{% block title %}Tenant List{% endblock title %}
+{% block content %}
+<nav aria-label="Tenant actions" class="mb-3">
+  <a class="btn btn-sm btn-secondary" href="{% url 'example:home' %}">Home</a>
+  <a class="btn btn-sm btn-primary" href="{% url 'example:tenant_create' %}">Create Tenant</a>
+</nav>
+<aside aria-label="Current session">
   <ul>
     <li>Current User: {{ request.user }}</li>
     <li>Current Tenant: {{ request.user.tenant }}</li>
   </ul>
-</div>
-<div>
-  <legend>Tenant List</legend>
-  <ul>
+</aside>
+<h1>Tenant List</h1>
+<table class="table">
+  <caption class="visually-hidden">Tenants you can switch to</caption>
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Name</th>
+      <th scope="col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
     {% for tenant in tenants %}
-    <li class="mb-2">
-      {{ forloop.counter }}. Name: {{ tenant.name }}
-      <button
-        class="btn btn-sm btn-primary ms-2"
-        onclick="window.location.href = '{% url 'example:user_tenant_update' tenant_id=tenant.id  %}';"
-      >
-        Change to this Tenant
-      </button>
-    </li>
+    <tr>
+      <th scope="row">{{ forloop.counter }}</th>
+      <td>{{ tenant.name }}</td>
+      <td>
+        <a class="btn btn-sm btn-primary"
+           href="{% url 'example:user_tenant_update' tenant_id=tenant.id %}">
+          Change to this Tenant<span class="visually-hidden">: {{ tenant.name }}</span>
+        </a>
+      </td>
+    </tr>
     {% endfor %}
-  </ul>
-</div>
+  </tbody>
+</table>
 {% endblock content %}

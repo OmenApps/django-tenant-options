@@ -1,82 +1,80 @@
-{% extends "example/base.html" %} {% block content %}
-<button
-  class="btn btn-sm btn-secondary"
-  onclick="window.location.href = '{% url 'example:home' %}';"
->
-  Home
-</button>
-<button
-  class="btn btn-sm btn-primary"
-  onclick="window.location.href = '{% url 'example:task_priority_option_create' %}';"
->
-  Create Task Priority Option
-</button>
-<button
-  class="btn btn-sm btn-primary"
-  onclick="window.location.href = '{% url 'example:task_priority_selections_update' %}';"
->
-  Update Task Priority Selections
-</button>
-<br /><br />
-<div>
+{% extends "example/base.html" %}
+{% block title %}Task Priority Options{% endblock title %}
+{% block content %}
+<nav aria-label="Task priority actions" class="mb-3">
+  <a class="btn btn-sm btn-secondary" href="{% url 'example:home' %}">Home</a>
+  <a class="btn btn-sm btn-primary" href="{% url 'example:task_priority_option_create' %}">Create Task Priority Option</a>
+  <a class="btn btn-sm btn-primary" href="{% url 'example:task_priority_selections_update' %}">Update Task Priority Selections</a>
+</nav>
+<aside aria-label="Current session">
   <ul>
     <li>Current User: {{ request.user }}</li>
     <li>Current Tenant: {{ request.user.tenant }}</li>
   </ul>
-</div>
-<div>
-  <legend>Task Priority Option List</legend>
+</aside>
 
-  Below is the list of all Options for a task's priority level that are
-  available for the current Tenant to select from.
-  <div class="pt-4">
-    <dl class="row">
-      <dt class="col-sm-3">Option Name</dt>
-      <dd class="col-sm-9">Details</dd>
-
-      {% for task_priority_option in task_priority_options %}
-      <dt class="col-sm-3">
-        {{ forloop.counter }} {{ task_priority_option.name }}
-      </dt>
-      <dd class="col-sm-9">
-        Option Type:
-        <span class="{{ task_priority_option.get_option_type_display }}">
-            {{ task_priority_option.get_option_type_display }}
-        </span>; Tenant: {{ task_priority_option.tenant }}
+<h1>Task Priority Option List</h1>
+<p>Below is the list of all Options for a task's priority level that are available for the current Tenant to select from.</p>
+<table class="table">
+  <caption class="visually-hidden">Available priority options</caption>
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Option Name</th>
+      <th scope="col">Option Type</th>
+      <th scope="col">Tenant</th>
+      <th scope="col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task_priority_option in task_priority_options %}
+    <tr>
+      <th scope="row">{{ forloop.counter }}</th>
+      <td>{{ task_priority_option.name }}</td>
+      <td>
+        <span class="option-type {% if task_priority_option.option_type == 'dm' %}option-type--mandatory{% elif task_priority_option.option_type == 'do' %}option-type--optional{% else %}option-type--custom{% endif %}">
+          {{ task_priority_option.get_option_type_display }}
+        </span>
+      </td>
+      <td>{{ task_priority_option.tenant }}</td>
+      <td>
         {% if task_priority_option.option_type == 'cu' %}
-            <button class="btn btn-sm btn-primary"
-                    onclick="window.location.href = '{% url 'example:task_priority_option_update' task_priority_option_id=task_priority_option.id  %}';"
-            >
-            Update
-            </button>
+        <a class="btn btn-sm btn-primary"
+           href="{% url 'example:task_priority_option_update' task_priority_option_id=task_priority_option.id %}">
+          Update<span class="visually-hidden"> {{ task_priority_option.name }}</span>
+        </a>
         {% endif %}
-      </dd>
-      {% endfor %}
-    </dl>
-  </div>
-</div>
-<div>
-  <legend>Task Priority Selection List</legend>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
-  Below is the list of all current Selections for a task's priority level for
-  the curent Tenant.
-  <div class="pt-4">
-    <dl class="row">
-      <dt class="col-sm-3">Selected Option Name</dt>
-      <dd class="col-sm-9">Details</dd>
-
-      {% for task_priority_selection in task_priority_selections %}
-      <dt class="col-sm-3">
-        {{ forloop.counter }} {{ task_priority_selection.name }}
-      </dt>
-      <dd class="col-sm-9">
-        Option Type:
-        <span class="{{ task_priority_selection.get_option_type_display }}"
-          >{{ task_priority_selection.get_option_type_display }}</span
-        >; Tenant: {{ task_priority_selection.tenant }}
-      </dd>
-      {% endfor %}
-    </dl>
-  </div>
-</div>
+<h2>Task Priority Selection List</h2>
+<p>Below is the list of all current Selections for a task's priority level for the current Tenant.</p>
+<table class="table">
+  <caption class="visually-hidden">Current priority selections</caption>
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Selected Option Name</th>
+      <th scope="col">Option Type</th>
+      <th scope="col">Tenant</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task_priority_selection in task_priority_selections %}
+    <tr>
+      <th scope="row">{{ forloop.counter }}</th>
+      <td>{{ task_priority_selection.name }}</td>
+      <td>
+        <span class="option-type {% if task_priority_selection.option_type == 'dm' %}option-type--mandatory{% elif task_priority_selection.option_type == 'do' %}option-type--optional{% else %}option-type--custom{% endif %}">
+          {{ task_priority_selection.get_option_type_display }}
+        </span>
+      </td>
+      <td>{{ task_priority_selection.tenant }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endblock content %}

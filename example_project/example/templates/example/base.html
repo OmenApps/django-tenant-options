@@ -1,6 +1,8 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <title>Example</title>
+    <meta charset="utf-8" />
+    <title>{% block title %}Example{% endblock title %}</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -8,20 +10,38 @@
       crossorigin="anonymous"
     />
     <style>
-      .Mandatory {
-        color: red;
+      /* Option-type colors are supplementary; the text label always states the type. */
+      .option-type--mandatory { color: #b30000; }   /* 7.2:1 on white */
+      .option-type--optional  { color: #8a4b00; }   /* 6.8:1 on white (was darkorange ~2.7:1) */
+      .option-type--custom    { color: #0a7d28; }   /* 5.3:1 on white */
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        background: #fff;
+        padding: 0.5rem 1rem;
+        z-index: 1000;
       }
-      .Optional {
-        color: darkorange;
-      }
-      .Custom {
-        color: green;
+      .skip-link:focus { left: 0; }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
       }
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
-    <div class="container mt-3">{% block content %} {% endblock content %}</div>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main id="main-content" class="container mt-3">
+      {% block content %}{% endblock content %}
+    </main>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
       integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"

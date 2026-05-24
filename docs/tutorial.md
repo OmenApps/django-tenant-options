@@ -410,39 +410,84 @@ Create a base template and a few page templates.
 
 ```html
 <!DOCTYPE html>
-<html>
-<head><title>{{ title }}</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+</head>
 <body>
-  <h1>{{ title }}</h1>
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save</button>
-  </form>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <main id="main">
+    <h1>{{ title }}</h1>
+
+    {% if form.errors %}
+    <div role="alert">
+      <h2>Please correct the following:</h2>
+      <ul>
+        {% for field in form %}
+          {% for error in field.errors %}
+            <li><a href="#id_{{ field.html_name }}">{{ field.label }}: {{ error }}</a></li>
+          {% endfor %}
+        {% endfor %}
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">Save</button>
+    </form>
+  </main>
 </body>
 </html>
 ```
+
+> **Accessibility note:** `{{ form.as_p }}` does not link each input to its error
+> text for screen readers. For production forms, pick one approach: either mix in
+> `django_tenant_options.forms.AccessibleFormMixin` (which sets `aria-invalid` and an
+> `aria-describedby` pointing at `id_{{ field.html_name }}_errors`, so you hand-render that
+> error container yourself), or use `django-crispy-forms`, which wires the associations with
+> its own ids. Use one or the other, not both - combining them leaves a dangling
+> `aria-describedby`.
 
 **`tasks/templates/tasks/task_list.html`:**
 
 ```html
 <!DOCTYPE html>
-<html>
-<head><title>Tasks</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tasks</title>
+</head>
 <body>
-  <h1>Tasks</h1>
-  <a href="{% url 'task_create' %}">Create Task</a>
-  <table>
-    <tr><th>Title</th><th>Priority</th><th>Status</th><th></th></tr>
-    {% for task in tasks %}
-    <tr>
-      <td>{{ task.title }}</td>
-      <td>{{ task.priority }}</td>
-      <td>{{ task.status }}</td>
-      <td><a href="{% url 'task_update' task.id %}">Edit</a></td>
-    </tr>
-    {% endfor %}
-  </table>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <main id="main">
+    <h1>Tasks</h1>
+    <p><a href="{% url 'task_create' %}">Create Task</a></p>
+    <table>
+      <caption>Your tasks</caption>
+      <thead>
+        <tr>
+          <th scope="col">Title</th>
+          <th scope="col">Priority</th>
+          <th scope="col">Status</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          <td>{{ task.title }}</td>
+          <td>{{ task.priority }}</td>
+          <td>{{ task.status }}</td>
+          <td><a href="{% url 'task_update' task.id %}">Edit<span class="visually-hidden"> {{ task.title }}</span></a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
 </body>
 </html>
 ```
@@ -451,40 +496,63 @@ Create a base template and a few page templates.
 
 ```html
 <!DOCTYPE html>
-<html>
-<head><title>{{ title }}</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+</head>
 <body>
-  <h1>{{ title }}</h1>
-  <p>
-    <a href="{% url create_url %}">Create Custom Option</a> |
-    <a href="{% url selections_url %}">Manage Selections</a>
-  </p>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <main id="main">
+    <h1>{{ title }}</h1>
+    <p>
+      <a href="{% url create_url %}">Create Custom Option</a> |
+      <a href="{% url selections_url %}">Manage Selections</a>
+    </p>
 
-  <h2>Available Options</h2>
-  <ul>
-    {% for option in options %}
-    <li>
-      {{ option.name }}
-      {% if option.option_type == "dm" %}
-        <span style="color: green;">(Mandatory)</span>
-      {% elif option.option_type == "do" %}
-        <span style="color: blue;">(Optional)</span>
-      {% else %}
-        <span style="color: orange;">(Custom)</span>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
+    <h2>Available Options</h2>
+    <ul>
+      {% for option in options %}
+      <li>
+        {{ option.name }}
+        {# The text label below carries the meaning; color is only supplementary. #}
+        {# Never remove the text label - color alone fails WCAG 1.4.1. #}
+        {% if option.option_type == "dm" %}
+          <span class="option-type option-type--mandatory">(Mandatory)</span>
+        {% elif option.option_type == "do" %}
+          <span class="option-type option-type--optional">(Optional)</span>
+        {% else %}
+          <span class="option-type option-type--custom">(Custom)</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
 
-  <h2>Currently Selected</h2>
-  <ul>
-    {% for selection in selections %}
-    <li>{{ selection.name }}</li>
-    {% endfor %}
-  </ul>
+    <h2>Currently Selected</h2>
+    <ul>
+      {% for selection in selections %}
+      <li>{{ selection.name }}</li>
+      {% endfor %}
+    </ul>
+  </main>
 </body>
 </html>
 ```
+
+> **Accessibility note:** The option type is shown with a text label (`(Mandatory)`,
+> `(Optional)`, `(Custom)`) so it does not rely on color (WCAG 1.4.1). If you add color
+> via CSS, verify each color/background pair meets the 4.5:1 contrast minimum (WCAG 1.4.3) -
+> for example, plain `orange` (#FFA500) text on white is only ~2.9:1 and fails. Define a
+> `.skip-link` and `.visually-hidden` utility in your CSS:
+>
+> ```css
+> .skip-link { position: absolute; left: -9999px; }
+> .skip-link:focus { left: 0; }
+> .visually-hidden {
+>   position: absolute; width: 1px; height: 1px;
+>   margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0;
+> }
+> ```
 
 ## Step 10: Wire up URLs
 

@@ -195,9 +195,18 @@ DJANGO_TENANT_OPTIONS = {
 Controls how `UserFacingFormMixin` handles existing records that reference a deleted selection.
 
 - **`False`** (default): The user must select a new option when editing the record.
-- **`True`**: The deleted option appears in the form but is disabled (read-only), preserving the historical value.
+- **`True`**: The deleted option appears in the form but is disabled, preserving the historical value. The widget is given `aria-disabled="true"` and a `help_text` explaining the locked state.
 
 In both cases, deleted options are never shown in forms for new records.
+
+```{note}
+**Accessibility:** When `True`, the HTML `disabled` attribute removes the locked field from
+the keyboard tab order, so keyboard-only and screen-reader users cannot focus it or reach the
+adjacent `help_text` explanation. The `disabled` attribute is presentational - it prevents the
+browser from resubmitting the stale value but is not a server-side guarantee, so the surrounding
+view should treat the field as immutable. If your audience relies on keyboard navigation, present
+the locked state as a visible alert near the field rather than relying on this setting alone.
+```
 
 ## Database settings
 

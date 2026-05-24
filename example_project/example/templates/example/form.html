@@ -1,27 +1,35 @@
-{% extends "./base.html" %} {% load crispy_forms_tags %} {% block content %}
-<button
-  class="btn btn-sm btn-secondary"
-  onclick="window.location.href = '{% url 'example:home' %}';"
->
-  Home
-</button>
-<button class="btn btn-sm btn-primary" onclick="history.back()">Back</button>
-<br /><br />
-<div>
+{% extends "./base.html" %}
+{% load crispy_forms_tags %}
+{% block title %}{{ title|default:"Form" }}{% endblock title %}
+{% block content %}
+<nav aria-label="Form navigation" class="mb-3">
+  <a class="btn btn-sm btn-secondary" href="{% url 'example:home' %}">Home</a>
+  <a class="btn btn-sm btn-secondary" href="{% url 'example:task_list' %}">Back to tasks</a>
+</nav>
+<aside aria-label="Current session">
   <ul>
     <li>Current User: {{ request.user }}</li>
     <li>Current Tenant: {{ request.user.tenant }}</li>
   </ul>
-</div>
-<div>
-  {% if form.errors %}
-  <p style="color: red">
-    Please correct the error{{ form.errors|pluralize }} below.
-  </p>
-  {% for field in form %} {% for error in field.errors %}
-  <p style="color: red">{{ error }}</p>
-  {% endfor %} {% endfor %} {% endif %}
+</aside>
+<h1>{{ title|default:"Form" }}</h1>
 
-  <form method="post">{% csrf_token %} {% crispy form form.helper %}</form>
+{% if form.errors %}
+<div role="alert" class="alert alert-danger">
+  <h2 class="h5">Please correct the error{{ form.errors|pluralize }} below.</h2>
+  <ul class="mb-0">
+    {% for field in form %}
+      {% for error in field.errors %}
+        <li><a href="#id_{{ field.html_name }}">{{ field.label }}: {{ error }}</a></li>
+      {% endfor %}
+    {% endfor %}
+    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
 </div>
+{% endif %}
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% crispy form form.helper %}
+</form>
 {% endblock content %}

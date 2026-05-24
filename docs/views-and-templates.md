@@ -122,6 +122,12 @@ Apply CSS classes based on option type for visual distinction:
 {% endfor %}
 ```
 
+> **Accessibility note:** The visible text ("Mandatory", "Optional", "Custom") is what
+> conveys meaning here - color is supplementary, satisfying WCAG 1.4.1. Do not drop the
+> text and rely on color alone. Also verify badge contrast (WCAG 1.4.3, 4.5:1 minimum):
+> Bootstrap's `badge-info` with white text fails contrast in common themes - prefer a
+> class whose color/background pair you have measured (e.g. `badge-dark`).
+
 ### Listing options for a tenant
 
 In your view, use the queryset methods to get the right set of options:
@@ -145,12 +151,41 @@ def priority_list(request):
 ### Simple form template
 
 ```html
-<form method="post">
+<form method="post" novalidate>
   {% csrf_token %}
+
+  {# Error summary - announced on submit because of role="alert". #}
+  {% if form.errors %}
+  <div role="alert">
+    <h2>Please correct the following:</h2>
+    <ul>
+      {% for field in form %}
+        {% for error in field.errors %}
+          <li><a href="#id_{{ field.html_name }}">{{ field.label }}: {{ error }}</a></li>
+        {% endfor %}
+      {% endfor %}
+      {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {{ form.as_p }}
   <button type="submit">Save</button>
 </form>
 ```
+
+> **Accessibility note:** `{{ form.as_p }}` does not attach `aria-invalid` or
+> `aria-describedby` to individual errored inputs. Pick one of these approaches (they are
+> alternatives, not complements):
+>
+> - Mix `django_tenant_options.forms.AccessibleFormMixin` into your form (it sets
+>   `aria-invalid` and points `aria-describedby` at `id_{{ field.html_name }}_errors`) **and**
+>   hand-render an error container with that exact id, e.g.
+>   `<ul id="id_{{ field.html_name }}_errors" role="alert">`. The mixin assumes you render
+>   the error markup yourself, so do not combine it with a renderer that emits its own error ids.
+> - Or use `django-crispy-forms`, whose template packs wire error associations using their own
+>   element ids. In that case do not also add `AccessibleFormMixin`, or its `aria-describedby`
+>   will point at a container crispy does not render.
 
 ## Admin integration
 
