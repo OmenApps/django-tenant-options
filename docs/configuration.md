@@ -288,6 +288,47 @@ class MyOption(AbstractOption):
 Manager compliance checks (`I001`, `I004`, `E002`, `E005`) only run when `DEBUG = True`.
 ```
 
+## Caching
+
+`django-tenant-options` can cache the per-tenant option lists returned by
+`OptionQuerySet.options_for_tenant` and `selected_options_for_tenant`. Caching is **opt-in** and
+**off by default**; when disabled, query behavior is identical to the uncached logic.
+
+Enable it in `settings.py`:
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    # ...
+    "CACHE_OPTIONS": True,          # master switch (default: False)
+    "CACHE_TIMEOUT": 300,           # seconds each cached list lives (default: 300)
+    "CACHE_KEY_PREFIX": "dto",      # prefix for all cache keys (default: "dto")
+    "CACHE_ALIAS": "default",       # which entry in settings.CACHES to use (default: "default")
+}
+```
+
+### Settings
+
+- **`CACHE_OPTIONS`** (`bool`, default `False`) - Master switch. When `True`, per-tenant option
+  lists are cached. When `False`, nothing is cached and behavior is unchanged.
+- **`CACHE_TIMEOUT`** (`int`, default `300`) - Time-to-live in seconds for each cached list.
+- **`CACHE_KEY_PREFIX`** (`str`, default `"dto"`) - Prefix applied to every cache key this package
+  writes, to avoid collisions with other cache users.
+- **`CACHE_ALIAS`** (`str`, default `"default"`) - Which Django cache backend (from
+  `settings.CACHES`) to store entries in.
+
+### How invalidation works
+
+Each Option model has an integer "namespace version" stored in the cache. Every per-tenant cache
+key embeds the current version. On `post_save` and `post_delete` of any Option or Selection
+instance, the package bumps that model's version, which makes all previously cached lists for the
+model unreachable without enumerating individual keys. Because Options soft-delete via `save()`
+(setting the `deleted` timestamp) and hard-delete via `delete(override=True)`, connecting both
+`post_save` and `post_delete` covers every case. Running `python manage.py syncoptions` also fires
+these signals, so default options stay consistent automatically.
+
+Cached entries store only a list of primary keys; reads return a normal QuerySet
+(`Model.objects.filter(pk__in=...)`), so the public API and return types are unchanged.
+
 ## Further reading
 
 - [Models Guide](models.md) -- Using these settings in your models

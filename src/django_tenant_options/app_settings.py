@@ -284,3 +284,20 @@ True, the deleted selection will be displayed in the form, but disabled so it ca
 
 In both cases, the deleted selection cannot be used in new forms.
 """
+
+CACHE_OPTIONS = _DJANGO_TENANT_OPTIONS.get("CACHE_OPTIONS", False)
+"""bool: Master switch for per-tenant option caching. Defaults to False (opt-in).
+
+When True, `OptionQuerySet.options_for_tenant` and `selected_options_for_tenant` cache their
+results per tenant. Cached entries are invalidated automatically via post_save/post_delete signals
+on Option and Selection models. When False, query behavior is identical to the uncached logic.
+"""
+
+CACHE_TIMEOUT = _DJANGO_TENANT_OPTIONS.get("CACHE_TIMEOUT", 300)
+"""int: Time-to-live in seconds for cached per-tenant option lists. Defaults to 300."""
+
+CACHE_KEY_PREFIX = _DJANGO_TENANT_OPTIONS.get("CACHE_KEY_PREFIX", "dto")
+"""str: Prefix applied to every cache key written by this package. Defaults to 'dto'."""
+
+CACHE_ALIAS = _DJANGO_TENANT_OPTIONS.get("CACHE_ALIAS", "default")
+"""str: Which Django cache (from settings.CACHES) to use. Defaults to 'default'."""

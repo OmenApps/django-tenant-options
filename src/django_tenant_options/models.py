@@ -430,11 +430,31 @@ class OptionQuerySet(_QuerySetBase):
 
         Set `include_deleted=True` to include deleted options.
         """
+        from django_tenant_options.cache import caching_enabled
+        from django_tenant_options.cache import get_cached_option_pks
+        from django_tenant_options.cache import get_version
+        from django_tenant_options.cache import make_key
+        from django_tenant_options.cache import set_cached_option_pks
+
         base_query = (
             Q(option_type=OptionType.MANDATORY)
             | Q(option_type=OptionType.OPTIONAL)
             | Q(option_type=OptionType.CUSTOM, tenant=tenant)
         )
+
+        if caching_enabled() and getattr(tenant, "pk", None) is not None:
+            label = self.model._meta.label
+            key = make_key(label, tenant.pk, "available", include_deleted, get_version(label))
+            cached_pks = get_cached_option_pks(key)
+            if cached_pks is not None:
+                return self.filter(pk__in=cached_pks)
+            if include_deleted:
+                queryset = self.filter(base_query)
+            else:
+                queryset = self.active().filter(base_query)
+            pks = list(queryset.values_list("pk", flat=True))
+            set_cached_option_pks(key, pks)
+            return self.filter(pk__in=pks)
 
         if include_deleted:
             return self.filter(base_query)
@@ -457,6 +477,12 @@ class OptionQuerySet(_QuerySetBase):
             include_deleted,
         )
 
+        from django_tenant_options.cache import caching_enabled
+        from django_tenant_options.cache import get_cached_option_pks
+        from django_tenant_options.cache import get_version
+        from django_tenant_options.cache import make_key
+        from django_tenant_options.cache import set_cached_option_pks
+
         try:
             SelectionModel = self.model.associated_tenants.through  # pylint: disable=C0103
             selections = SelectionModel.objects.active().filter(tenant=tenant).values_list("option", flat=True)
@@ -465,6 +491,20 @@ class OptionQuerySet(_QuerySetBase):
                 Q(id__in=selections)
                 & (Q(option_type=OptionType.OPTIONAL) | Q(option_type=OptionType.CUSTOM, tenant=tenant))
             )
+
+            if caching_enabled() and getattr(tenant, "pk", None) is not None:
+                label = self.model._meta.label
+                key = make_key(label, tenant.pk, "selected", include_deleted, get_version(label))
+                cached_pks = get_cached_option_pks(key)
+                if cached_pks is not None:
+                    return self.filter(pk__in=cached_pks)
+                if include_deleted:
+                    queryset = self.filter(base_query)
+                else:
+                    queryset = self.active().filter(base_query)
+                pks = list(queryset.values_list("pk", flat=True))
+                set_cached_option_pks(key, pks)
+                return self.filter(pk__in=pks)
 
             if include_deleted:
                 return self.filter(base_query)
