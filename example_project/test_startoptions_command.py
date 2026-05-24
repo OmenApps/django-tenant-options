@@ -408,3 +408,27 @@ class TestGeneratedCodeIsValidPython:
             + scaffolding.render_forms_code("Priority")
         )
         compile(code, "<generated-forms>", "exec")
+
+
+class TestRenderFormsAccessibility:
+    """Generated forms must include descriptive labels and help_text."""
+
+    def _render(self):
+        return scaffolding.render_forms_code(name="Priority")
+
+    def test_selections_form_sets_label_and_help_text(self):
+        code = self._render()
+        assert 'self.fields["selections"].label' in code
+        assert 'self.fields["selections"].help_text' in code
+
+    def test_create_form_sets_labels_and_help_texts(self):
+        code = self._render()
+        assert "labels = {" in code
+        assert "help_texts = {" in code
+
+    def test_generated_forms_have_a_review_todo(self):
+        code = self._render()
+        assert "TODO" in code
+
+    # Python validity of the generated forms code is covered by
+    # TestGeneratedCodeIsValidPython.test_forms_code_compiles.

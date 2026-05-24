@@ -8,6 +8,8 @@ from django.contrib.auth import get_user_model
 
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import NoTenantProvidedFromViewError
+from django_tenant_options.form_fields import OptionsModelMultipleChoiceField
+from django_tenant_options.forms import AccessibleFormMixin
 from django_tenant_options.forms import OptionCreateFormMixin
 from django_tenant_options.forms import OptionUpdateFormMixin
 from django_tenant_options.forms import SelectionsForm
@@ -1007,7 +1009,11 @@ class TestUserFacingFormMixin:
             mp.setattr("django_tenant_options.forms.DISABLE_FIELD_FOR_DELETED_SELECTION", True)
             form = self.TestUserFacingForm(tenant=tenant, instance=task)
             assert form.fields["priority"].widget.attrs.get("disabled") == "disabled"
-            assert form.fields["priority"].widget.attrs.get("readonly") == "readonly"
+            # readonly is invalid on <select> and is intentionally not set; the field
+            # is instead announced to assistive tech via aria-disabled + help_text.
+            assert "readonly" not in form.fields["priority"].widget.attrs
+            assert form.fields["priority"].widget.attrs.get("aria-disabled") == "true"
+            assert "no longer available" in str(form.fields["priority"].help_text)
             assert option in form.fields["priority"].queryset
 
     def test_multiple_option_fields_one_deleted(self):
@@ -1343,3 +1349,155 @@ class TestOptionCreateFormReservedNameHint:
         help_text = form.fields["name"].help_text
         assert "Pick a short label." in help_text
         assert "Reserved default names you cannot reuse" in help_text
+
+
+@pytest.mark.django_db
+class TestDeleteFieldAccessibility:
+    """The delete checkbox must carry a descriptive label and help_text."""
+
+    class _Form(OptionUpdateFormMixin, forms.ModelForm):
+        __test__ = False
+
+        class Meta:
+            model = TaskPriorityOption
+            fields = ["name", "option_type", "tenant", "deleted"]
+
+    def test_delete_field_has_descriptive_label_and_help_text(self):
+        tenant = Tenant.objects.create(name="T", subdomain="t")
+        option = TaskPriorityOption.objects.create_for_tenant(tenant, "Custom A")
+        form = self._Form(instance=option, tenant=tenant)
+        delete_field = form.fields["delete"]
+        assert str(delete_field.label) == "Delete this option"
+        assert "remove this option" in str(delete_field.help_text)
+
+
+@pytest.mark.django_db
+class TestSelectionsFieldAccessibility:
+    """The selections field must carry a label and help_text explaining mandatory options."""
+
+    class _Form(SelectionsForm):
+        __test__ = False
+
+        class Meta:
+            model = TaskPrioritySelection
+
+    def test_selections_field_has_label_and_help_text(self):
+        tenant = Tenant.objects.create(name="T", subdomain="t")
+        form = self._Form(tenant=tenant)
+        field = form.fields["selections"]
+        assert str(field.label) == "Available options"
+        assert "Mandatory options" in str(field.help_text)
+
+
+# NOTE: the disabled/aria-disabled/help_text behaviour of deleted selections is covered
+# end-to-end by TestUserFacingFormMixin.test_disabled_field_for_deleted_selection_setting,
+# which exercises the real form lifecycle rather than calling the private helper directly.
+
+
+@pytest.mark.django_db
+class TestOptionTypeSuffixIsTranslatable:
+    """The (mandatory)/(optional)/(custom) suffixes must come from translatable strings."""
+
+    def test_suffixes_are_lazy_not_frozen_literals(self):
+        """Every suffix must be a lazy translation string so it follows the active locale.
+
+        The project ships no second-locale catalog, so a "rendered French label differs"
+        assertion would be tautological. The meaningful, non-tautological contract is that
+        the suffixes are lazy (evaluated at render time) rather than frozen ``str``; that is
+        exactly what ``isinstance(..., Promise)`` verifies here.
+        """
+        from django.utils.functional import Promise
+
+        from django_tenant_options import form_fields
+
+        for option_type, suffix in form_fields._OPTION_TYPE_SUFFIXES.items():
+            assert isinstance(suffix, Promise), f"{option_type} suffix is a frozen str, not a lazy translation"
+
+    def test_mandatory_label_keeps_concise_english_suffix(self):
+        option = TaskPriorityOption.objects.filter(option_type=OptionType.MANDATORY).first()
+        if option is None:
+            option = TaskPriorityOption.objects.create_mandatory("Mand A")
+        field = OptionsModelMultipleChoiceField(queryset=TaskPriorityOption.objects.all())
+        assert field.label_from_instance(option) == f"{option.name} (mandatory)"
+
+
+@pytest.mark.django_db
+class TestAccessibleFormMixin:
+    """AccessibleFormMixin wires aria-invalid and aria-describedby onto errored fields."""
+
+    class _Form(AccessibleFormMixin, forms.Form):
+        __test__ = False
+        name = forms.CharField(required=True)
+
+    def test_errored_field_gets_aria_attributes(self):
+        form = self._Form(data={"name": ""})
+        assert not form.is_valid()
+        widget_attrs = form.fields["name"].widget.attrs
+        assert widget_attrs.get("aria-invalid") == "true"
+        assert widget_attrs.get("aria-describedby") == "id_name_errors"
+
+    def test_clean_field_has_no_aria_invalid(self):
+        form = self._Form(data={"name": "ok"})
+        assert form.is_valid()
+        assert "aria-invalid" not in form.fields["name"].widget.attrs
+
+    def test_dict_style_clean_errors_are_wired(self):
+        """Errors raised as a dict from clean() (add_error(None, {...})) must be wired.
+
+        This is the canonical Django/ModelForm idiom; a naive single-field check
+        would miss it entirely.
+        """
+
+        class _DictForm(AccessibleFormMixin, forms.Form):
+            __test__ = False
+            name = forms.CharField(required=False)
+            email = forms.CharField(required=False)
+
+            def clean(self):
+                raise forms.ValidationError({"name": "bad name", "email": "bad email"})
+
+        form = _DictForm(data={"name": "x", "email": "y"})
+        assert not form.is_valid()
+        for fname in ("name", "email"):
+            attrs = form.fields[fname].widget.attrs
+            assert attrs.get("aria-invalid") == "true"
+            assert attrs.get("aria-describedby") == f"id_{fname}_errors"
+
+    def test_non_field_error_does_not_raise_or_wire_fields(self):
+        """add_error(None, <string>) (a non-field error) must be a safe no-op for widgets."""
+
+        class _NonFieldForm(AccessibleFormMixin, forms.Form):
+            __test__ = False
+            name = forms.CharField(required=False)
+
+            def clean(self):
+                raise forms.ValidationError("form-level problem")
+
+        form = _NonFieldForm(data={"name": "x"})
+        assert not form.is_valid()
+        assert "form-level problem" in form.non_field_errors()
+        assert "aria-invalid" not in form.fields["name"].widget.attrs
+
+    def test_aria_describedby_is_prefix_aware(self):
+        """With a form prefix, aria-describedby matches the prefixed html_name."""
+        # A prefixed form reads data under the "step1-name" key; using "name" would
+        # make the field error only because the key is absent (right answer, wrong reason).
+        form = self._Form(data={"step1-name": ""}, prefix="step1")
+        assert not form.is_valid()
+        attrs = form.fields["name"].widget.attrs
+        assert attrs.get("aria-describedby") == "id_step1-name_errors"
+
+    def test_multiple_errors_on_one_field_keep_a_single_describedby(self):
+        """Repeated add_error calls on the same field must not duplicate the id."""
+
+        class _MultiForm(AccessibleFormMixin, forms.Form):
+            __test__ = False
+            name = forms.CharField(required=True)
+
+            def clean(self):
+                self.add_error("name", "second problem")
+                return super().clean()
+
+        form = _MultiForm(data={"name": ""})
+        assert not form.is_valid()
+        assert form.fields["name"].widget.attrs.get("aria-describedby") == "id_name_errors"

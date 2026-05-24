@@ -8,6 +8,7 @@ from django.db import IntegrityError
 from django.db import transaction
 from django.forms.widgets import HiddenInput
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from django_tenant_options.app_settings import DEFAULT_MULTIPLE_CHOICE_FIELD
 from django_tenant_options.app_settings import DISABLE_FIELD_FOR_DELETED_SELECTION
@@ -176,7 +177,11 @@ class OptionUpdateFormMixin(OptionCreateFormMixin):  # pylint disable=R0903
         super().__init__(*args, **kwargs)
 
         # Add a delete field to the form
-        self.fields["delete"] = forms.BooleanField(required=False)
+        self.fields["delete"] = forms.BooleanField(
+            required=False,
+            label=_("Delete this option"),
+            help_text=_("Check this box to remove this option. It can be restored later by an administrator."),
+        )
 
     def clean(self):
         """Clean the form data."""
@@ -206,10 +211,21 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
         self._set_selections_queryset()
 
     def _initialize_selections_field(self):
-        """Initialize the `selections` field if it's not already present."""
+        """Initialize the `selections` field if it's not already present.
+
+        Consumers are encouraged to override ``label`` and ``help_text`` in a
+        subclass to describe their domain (for example "Priority levels"), but
+        the defaults below are descriptive enough to be accessible out of the box.
+        """
         if "selections" not in self.fields:
             self.fields["selections"] = self.multiple_choice_field_class(
-                queryset=self.option_model.objects.none(), required=False
+                queryset=self.option_model.objects.none(),
+                required=False,
+                label=_("Available options"),
+                help_text=_(
+                    "Select the options that should be available to your users. "
+                    "Mandatory options are always included and cannot be removed."
+                ),
             )
 
     def _remove_option_field(self):
@@ -340,14 +356,68 @@ class UserFacingFormMixin:
                 self._handle_disabled_field_for_deleted_selection(field, option_for_this_field)
 
     def _handle_disabled_field_for_deleted_selection(self, field, option_for_this_field):
-        """Disable the field if the selected option has been deleted and setting is enabled."""
+        """Lock the field if the selected option has been deleted and the setting is enabled.
+
+        ``readonly`` is not a valid attribute on ``<select>`` and is removed. The
+        field stays ``disabled`` (so the stale value cannot be re-submitted) but
+        also carries ``aria-disabled`` and an explanatory ``help_text`` so screen
+        reader users are told why the control is locked instead of finding it
+        silently skipped.
+        """
         if DISABLE_FIELD_FOR_DELETED_SELECTION and option_for_this_field.pk:
             field.queryset = field.queryset | field.queryset.model.objects.filter(pk=option_for_this_field.pk)
-            field.widget.attrs["readonly"] = "readonly"
             field.widget.attrs["disabled"] = "disabled"
+            field.widget.attrs["aria-disabled"] = "true"
+            field.help_text = _(
+                "The previously selected option is no longer available. "
+                "Please ask an administrator to choose a replacement."
+            )
 
     def clean(self):
         """Ensure the tenant is correct even if HiddenField was manipulated."""
         cleaned_data = super().clean()
         cleaned_data["tenant"] = self.tenant
         return cleaned_data
+
+
+class AccessibleFormMixin:
+    """Opt-in mixin that links validation errors to their inputs for assistive tech.
+
+    When a field fails validation, screen readers are not told unless the input
+    carries ``aria-invalid`` and points to its error text via ``aria-describedby``.
+    Django does not do this automatically. Mix this in (before ``forms.Form`` or
+    ``forms.ModelForm``) to get it for free::
+
+        class MyForm(AccessibleFormMixin, forms.ModelForm):
+            ...
+
+    Render the matching error container with the id this mixin references, e.g.::
+
+        <ul id="id_{{ field.html_name }}_errors" role="alert">...</ul>
+    """
+
+    def add_error(self, field, error):
+        """Wire aria-invalid/aria-describedby onto every errored field's widget.
+
+        This inspects ``self.errors`` rather than only the ``field`` argument, so
+        it also covers errors raised as a dict (``add_error(None, {...})``) and
+        the per-field errors ``ModelForm`` validation raises internally - the
+        common ``clean()`` idioms that a single-field check would miss. Non-field
+        errors (keyed under ``NON_FIELD_ERRORS``) are skipped because they have no
+        widget to annotate. The ``aria-describedby`` id matches the documented
+        ``id_{{ field.html_name }}_errors`` container so it is prefix-aware.
+        """
+        super().add_error(field, error)
+        for name in self.errors:
+            if name not in self.fields:
+                continue
+            bound = self[name]
+            widget = self.fields[name].widget
+            widget.attrs["aria-invalid"] = "true"
+            # Append (rather than overwrite) so a pre-existing aria-describedby - e.g. a
+            # help-text association set by the renderer - is preserved. Idempotent across
+            # the repeated add_error calls Django makes during full_clean.
+            error_id = f"id_{bound.html_name}_errors"
+            existing = widget.attrs.get("aria-describedby", "")
+            if error_id not in existing.split():
+                widget.attrs["aria-describedby"] = f"{existing} {error_id}".strip()

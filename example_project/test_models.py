@@ -972,3 +972,16 @@ class TestOptionDeleteExceptionHandling:
 
         with pytest.raises(RuntimeError, match="Save failed"):
             option.delete()
+
+
+@pytest.mark.django_db
+class TestDeletedFieldVerboseName:
+    """The deleted timestamp fields must have explicit, unambiguous verbose names."""
+
+    def test_option_deleted_verbose_name(self):
+        field = TaskPriorityOption._meta.get_field("deleted")
+        assert str(field.verbose_name) == "Deleted at"
+
+    def test_selection_deleted_verbose_name(self):
+        field = TaskPrioritySelection._meta.get_field("deleted")
+        assert str(field.verbose_name) == "Deleted at"

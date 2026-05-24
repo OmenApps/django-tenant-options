@@ -734,9 +734,10 @@ class AbstractOption(_ModelBase, metaclass=OptionModelBase):
 
     name = models.CharField(_("Option Name"), max_length=100)
     deleted = models.DateTimeField(
+        _("Deleted at"),
         null=True,
         blank=True,
-        help_text=_("When was this option deleted?"),
+        help_text=_("When was this option deleted? Leave blank for active options."),
     )
 
     objects = OptionManager.from_queryset(OptionQuerySet)()  # type: ignore[misc]
@@ -1082,9 +1083,10 @@ class AbstractSelection(_ModelBase, metaclass=SelectionModelBase):
     option_model_related_query_name = OPTION_MODEL_RELATED_QUERY_NAME
 
     deleted = models.DateTimeField(
+        _("Deleted at"),
         null=True,
         blank=True,
-        help_text=_("When was this selection deleted?"),
+        help_text=_("When was this selection deleted? Leave blank for active selections."),
     )
 
     objects = SelectionManager.from_queryset(SelectionQuerySet)()  # type: ignore[misc]

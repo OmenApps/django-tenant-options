@@ -40,9 +40,10 @@ class TestOptionSerializer:
         serializer = PriorityOptionSerializer(option)
         data = serializer.data
 
-        assert set(data.keys()) == {"id", "name", "option_type", "deleted", "tenant"}
+        assert set(data.keys()) == {"id", "name", "option_type", "option_type_display", "deleted", "tenant"}
         assert data["name"] == "Spicy"
         assert data["option_type"] == OptionType.CUSTOM
+        assert data["option_type_display"] == "Custom"
         assert data["tenant"] == tenant.id
         assert data["deleted"] is None
 
@@ -55,6 +56,30 @@ class TestOptionSerializer:
 
         assert Slim.Meta.fields == ["id", "name"]
         assert Slim.Meta.model is TaskPriorityOption
+
+    def test_factory_serializer_includes_display_label(self):
+        """The default factory output exposes a human-readable option_type_display."""
+        from django_tenant_options.choices import OptionType
+        from django_tenant_options.contrib.rest_framework.serializers import option_serializer_factory
+        from example_project.example.models import TaskPriorityOption
+
+        serializer_cls = option_serializer_factory(TaskPriorityOption)
+        option = TaskPriorityOption.objects.create_mandatory("Mand X")
+        data = serializer_cls(option).data
+        assert data["option_type"] == OptionType.MANDATORY
+        assert data["option_type_display"] == "Default Mandatory"
+
+    def test_factory_without_display_field_does_not_error(self):
+        """Excluding option_type_display from fields must not trip DRF's declared-field check."""
+        from django_tenant_options.choices import OptionType
+        from django_tenant_options.contrib.rest_framework.serializers import option_serializer_factory
+        from example_project.example.models import TaskPriorityOption
+
+        cls = option_serializer_factory(TaskPriorityOption, fields=["id", "name", "option_type"])
+        option = TaskPriorityOption.objects.create_mandatory("Check")
+        data = cls(option).data
+        assert "option_type_display" not in data
+        assert data["option_type"] == OptionType.MANDATORY
 
 
 @pytest.mark.django_db

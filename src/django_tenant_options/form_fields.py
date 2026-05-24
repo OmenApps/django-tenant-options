@@ -7,18 +7,21 @@ from django.utils.translation import gettext_lazy as _
 from django_tenant_options.choices import OptionType
 
 
+# Translatable suffixes appended to option labels to indicate their type.
+_OPTION_TYPE_SUFFIXES = {
+    OptionType.MANDATORY: _("mandatory"),
+    OptionType.OPTIONAL: _("optional"),
+    OptionType.CUSTOM: _("custom"),
+}
+
+
 class OptionsModelMultipleChoiceField(forms.ModelMultipleChoiceField):
     """Displays objects and shows which are mandatory."""
 
     def label_from_instance(self, obj) -> str:
-        """Return a label for each object."""
-        labels = {
-            OptionType.MANDATORY: f"{obj.name} (mandatory)",
-            OptionType.OPTIONAL: f"{obj.name} (optional)",
-            OptionType.CUSTOM: f"{obj.name} (custom)",
-        }
-
-        return labels.get(obj.option_type) or str(obj.name)
+        """Return a label for each object, suffixed with its translated option type."""
+        suffix = _OPTION_TYPE_SUFFIXES.get(obj.option_type)
+        return f"{obj.name} ({suffix})" if suffix else str(obj.name)
 
 
 class GroupedModelChoiceIterator(ModelChoiceIterator):

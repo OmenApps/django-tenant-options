@@ -10,7 +10,7 @@ provided factory functions to build a bound serializer dynamically.
 from rest_framework import serializers
 
 
-OPTION_FIELDS = ["id", "name", "option_type", "deleted", "tenant"]
+OPTION_FIELDS = ["id", "name", "option_type", "option_type_display", "deleted", "tenant"]
 SELECTION_FIELDS = ["id", "tenant", "option", "deleted"]
 
 
@@ -22,7 +22,12 @@ class OptionSerializer(serializers.ModelSerializer):
         class PriorityOptionSerializer(OptionSerializer):
             class Meta(OptionSerializer.Meta):
                 model = TaskPriorityOption
+
+    ``option_type_display`` is the human-readable label for ``option_type`` and
+    is provided so downstream UIs never have to render the raw database code.
     """
+
+    option_type_display = serializers.CharField(source="get_option_type_display", read_only=True)
 
     class Meta:
         """Default Meta. ``model`` must be set by a subclass."""
@@ -56,14 +61,21 @@ def option_serializer_factory(model, fields=None):
         fields: Optional list of field names. Defaults to OPTION_FIELDS.
 
     Returns:
-        A ``ModelSerializer`` subclass with ``Meta.model`` set to ``model``.
+        A ``ModelSerializer`` subclass with ``Meta.model`` set to ``model`` and a
+        read-only ``option_type_display`` field (when included in ``fields``).
     """
+    resolved_fields = list(fields) if fields is not None else list(OPTION_FIELDS)
     meta = type(
         "Meta",
         (),
-        {"model": model, "fields": list(fields) if fields is not None else list(OPTION_FIELDS)},
+        {"model": model, "fields": resolved_fields},
     )
-    return type(f"{model.__name__}Serializer", (serializers.ModelSerializer,), {"Meta": meta})
+    attrs = {"Meta": meta}
+    # Only declare the SerializerMethodField-style display when it is actually requested,
+    # otherwise DRF raises because a declared field is missing from Meta.fields.
+    if "option_type_display" in resolved_fields:
+        attrs["option_type_display"] = serializers.CharField(source="get_option_type_display", read_only=True)
+    return type(f"{model.__name__}Serializer", (serializers.ModelSerializer,), attrs)
 
 
 def selection_serializer_factory(model, fields=None):
