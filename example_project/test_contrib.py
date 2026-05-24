@@ -1,4 +1,4 @@
-"""Test cases for the optional REST Framework integration extras."""
+"""Test cases for the optional contrib API integration extras."""
 
 import pytest
 
@@ -7,8 +7,8 @@ pytest.importorskip("rest_framework")
 
 
 @pytest.mark.django_db
-class TestRestFrameworkBootstrap:
-    """Sanity checks that the DRF test module is collected and runnable."""
+class TestContribBootstrap:
+    """Sanity checks that the contrib API test module is collected and runnable."""
 
     def test_rest_framework_importable(self):
         """rest_framework must be importable because dev deps install it."""

@@ -11,3 +11,4 @@ Django==5.1.2
 django-auto-prefetch>=1.11.0
 django-crispy-forms==2.3
 crispy-bootstrap5==2024.10
+djangorestframework==3.17.1

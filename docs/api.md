@@ -1,4 +1,4 @@
-# REST Framework and API Integration
+# API Integration
 
 `django-tenant-options` ships optional, fully-guarded API integration extras.
 The package core has no API dependencies - these extras live in

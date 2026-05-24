@@ -43,7 +43,7 @@ caption: How-To Guides
 models
 forms
 views-and-templates
-rest-framework
+api
 commands
 customization
 ```
