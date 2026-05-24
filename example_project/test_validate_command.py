@@ -228,11 +228,11 @@ class TestValidateOptionsCommand:
 
     def test_database_query_exception(self, monkeypatch):
         """Test warning when database query for duplicates raises an exception."""
-        from django_tenant_options.management.commands.validateoptions import Command
+        from django_tenant_options import diagnostics
 
-        original_validate = Command._validate_option_model
+        original_check = diagnostics.check_option_model
 
-        def patched_validate(self, model, errors, warnings):
+        def patched_check(model, result):
             original_filter = model.objects.filter
 
             def failing_filter(*args, **kwargs):
@@ -241,9 +241,9 @@ class TestValidateOptionsCommand:
                 return original_filter(*args, **kwargs)
 
             monkeypatch.setattr(model.objects, "filter", failing_filter)
-            original_validate(self, model, errors, warnings)
+            original_check(model, result)
 
-        monkeypatch.setattr(Command, "_validate_option_model", patched_validate)
+        monkeypatch.setattr(diagnostics, "check_option_model", patched_check)
 
         out = StringIO()
         call_command("validateoptions", stdout=out)
@@ -373,11 +373,11 @@ class TestValidateOptionsCommand:
 
     def test_orphaned_selections_query_exception(self, monkeypatch):
         """Test warning when orphaned selections query raises an exception."""
-        from django_tenant_options.management.commands.validateoptions import Command
+        from django_tenant_options import diagnostics
 
-        original_validate = Command._validate_selection_model
+        original_check = diagnostics.check_selection_model
 
-        def patched_validate(self, model, errors, warnings):
+        def patched_check(model, result):
             original_filter = model.objects.filter
 
             def failing_filter(*args, **kwargs):
@@ -386,9 +386,9 @@ class TestValidateOptionsCommand:
                 return original_filter(*args, **kwargs)
 
             monkeypatch.setattr(model.objects, "filter", failing_filter)
-            original_validate(self, model, errors, warnings)
+            original_check(model, result)
 
-        monkeypatch.setattr(Command, "_validate_selection_model", patched_validate)
+        monkeypatch.setattr(diagnostics, "check_selection_model", patched_check)
 
         out = StringIO()
         call_command("validateoptions", stdout=out)
@@ -450,29 +450,76 @@ class TestValidateOptionsCommand:
         assert "Missing 'objects' manager" in output
 
     def test_no_orphaned_selections_message(self):
-        """Test that valid configuration shows 'No orphaned selections found'."""
+        """Test that valid configuration shows the no-orphaned-selections info line."""
         out = StringIO()
         call_command("validateoptions", stdout=out)
         output = out.getvalue()
-        assert "No orphaned selections found" in output
-
-    def test_option_model_count_displayed(self):
-        """Test that the number of found Option models is displayed."""
-        out = StringIO()
-        call_command("validateoptions", stdout=out)
-        output = out.getvalue()
-        assert "Found 2 Option model(s)" in output
-
-    def test_selection_model_count_displayed(self):
-        """Test that the number of found Selection models is displayed."""
-        out = StringIO()
-        call_command("validateoptions", stdout=out)
-        output = out.getvalue()
-        assert "Found 2 Selection model(s)" in output
+        assert "no orphaned selections found" in output
 
     def test_constraints_properly_configured_message(self):
         """Test that properly configured constraints are reported."""
         out = StringIO()
         call_command("validateoptions", stdout=out)
         output = out.getvalue()
-        assert "Database constraints properly configured" in output
+        assert "database constraints properly configured" in output
+
+
+@pytest.mark.django_db
+class TestValidateOptionsFlags:
+    """Test cases for the setup-doctor summary, --quiet, and --strict behavior."""
+
+    def test_summary_line_present(self):
+        """The summary line appears in normal output."""
+        out = StringIO()
+        call_command("validateoptions", stdout=out)
+        output = out.getvalue()
+        assert "Summary:" in output
+        assert "checks passed" in output
+
+    def test_quiet_suppresses_checklist_but_keeps_summary(self):
+        """--quiet hides per-model [x] checklist lines but keeps the summary."""
+        full = StringIO()
+        call_command("validateoptions", stdout=full)
+        full_output = full.getvalue()
+        assert "[x]" in full_output  # sanity: normal output has checklist marks
+
+        quiet = StringIO()
+        call_command("validateoptions", "--quiet", stdout=quiet)
+        quiet_output = quiet.getvalue()
+        assert "[x]" not in quiet_output
+        assert "Summary:" in quiet_output
+
+    def test_strict_exits_nonzero_on_warning(self):
+        """--strict exits 1 when a warning condition is present (orphaned selection)."""
+        from django.utils import timezone
+
+        tenant = Tenant.objects.create(name="Strict T", subdomain="strict-warn")
+        option = TaskPriorityOption.objects.create(
+            name="Strict Orphan Option", option_type=OptionType.CUSTOM, tenant=tenant
+        )
+        TaskPrioritySelection.objects.create(tenant=tenant, option=option)
+        TaskPriorityOption.objects.filter(pk=option.pk).update(deleted=timezone.now())
+
+        out = StringIO()
+        with pytest.raises(SystemExit) as exc_info:
+            call_command("validateoptions", "--strict", stdout=out)
+        assert exc_info.value.code == 1
+        output = out.getvalue()
+        assert "active selection(s) pointing to deleted options" in output
+
+    def test_strict_does_not_exit_when_no_warnings(self):
+        """--strict exits cleanly (no SystemExit) when there are no warnings or errors."""
+        out = StringIO()
+        # Valid example config has no warnings/errors -> no SystemExit expected.
+        call_command("validateoptions", "--strict", stdout=out)
+        output = out.getvalue()
+        assert "All validations passed!" in output
+
+    def test_summary_includes_plaintext_status_word(self):
+        """The summary carries a plaintext status word so it does not rely on color alone."""
+        out = StringIO()
+        call_command("validateoptions", stdout=out)
+        output = out.getvalue()
+        # Clean example config -> PASSED (no warnings, no errors).
+        assert "PASSED" in output
+        assert "Summary:" in output

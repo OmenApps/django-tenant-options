@@ -13,6 +13,7 @@ from django_tenant_options.forms import OptionUpdateFormMixin
 from django_tenant_options.forms import SelectionsForm
 from django_tenant_options.forms import TenantFormBaseMixin
 from django_tenant_options.forms import UserFacingFormMixin
+from example_project.example.forms import TaskPriorityOptionCreateForm
 from example_project.example.models import Task
 from example_project.example.models import TaskPriorityOption
 from example_project.example.models import TaskPrioritySelection
@@ -1287,3 +1288,58 @@ class TestSelectionsForm:
         form = CustomSelectionsForm(tenant=tenant)
         # Ensure the pre-defined selections field is used
         assert isinstance(form.fields["selections"], forms.ModelMultipleChoiceField)
+
+
+@pytest.mark.django_db
+class TestOptionCreateFormReservedNameHint:
+    """Test cases for the reserved-default-name help_text on create forms."""
+
+    def test_name_help_text_lists_default_names(self):
+        """The name field help_text lists the model's reserved default option names."""
+        tenant = Tenant.objects.create(name="Hint Tenant", subdomain="hint-tenant")
+        form = TaskPriorityOptionCreateForm(tenant=tenant)
+        help_text = form.fields["name"].help_text
+        assert "Critical" in help_text
+        assert "High" in help_text
+        assert "Low" in help_text
+        assert "Medium" in help_text
+
+    def test_name_help_text_mentions_reserved(self):
+        """The help_text explains the names cannot be reused."""
+        tenant = Tenant.objects.create(name="Hint Tenant 2", subdomain="hint-tenant-2")
+        form = TaskPriorityOptionCreateForm(tenant=tenant)
+        assert "Reserved" in form.fields["name"].help_text
+
+    def test_colliding_name_is_invalid_with_conflict_message(self):
+        """Submitting a custom option named like a default fails with the model's conflict message."""
+        tenant = Tenant.objects.create(name="Collide Tenant", subdomain="collide-tenant")
+        # Ensure the conflicting default option exists in the DB so model clean() can detect it.
+        TaskPriorityOption.objects.create(name="High", option_type=OptionType.MANDATORY)
+        form = TaskPriorityOptionCreateForm(
+            data={
+                "name": "High",
+                "option_type": OptionType.CUSTOM,
+                "tenant": tenant.id,
+                "deleted": "",
+            },
+            tenant=tenant,
+        )
+        assert form.is_valid() is False
+        all_errors = " ".join(str(e) for e in form.errors.values())
+        assert "conflicts with an existing" in all_errors
+        assert "Available default options" in all_errors
+
+    def test_existing_help_text_is_preserved(self):
+        """A help_text defined on the name field is preserved and the hint is appended."""
+
+        class CustomHelpCreateForm(OptionCreateFormMixin, forms.ModelForm):
+            class Meta:
+                model = TaskPriorityOption
+                fields = "__all__"
+                help_texts = {"name": "Pick a short label."}
+
+        tenant = Tenant.objects.create(name="Preserve Tenant", subdomain="preserve-tenant")
+        form = CustomHelpCreateForm(tenant=tenant)
+        help_text = form.fields["name"].help_text
+        assert "Pick a short label." in help_text
+        assert "Reserved default names you cannot reuse" in help_text

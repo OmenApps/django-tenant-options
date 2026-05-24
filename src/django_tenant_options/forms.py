@@ -14,6 +14,7 @@ from django_tenant_options.app_settings import DISABLE_FIELD_FOR_DELETED_SELECTI
 from django_tenant_options.choices import OptionType
 from django_tenant_options.exceptions import NoTenantProvidedFromViewError
 from django_tenant_options.helpers import all_option_subclasses
+from django_tenant_options.helpers import get_default_option_names
 
 
 logger = logging.getLogger("django_tenant_options")
@@ -109,6 +110,7 @@ class OptionCreateFormMixin(OptionFormMixin, TenantFormBaseMixin):  # pylint dis
         super().__init__(*args, **kwargs)
         self._initialize_option_type_field()
         self._initialize_deleted_field()
+        self._initialize_name_help_text()
 
     def _initialize_option_type_field(self):
         """Set the option_type field to OptionType.CUSTOM and use a HiddenInput widget."""
@@ -119,6 +121,26 @@ class OptionCreateFormMixin(OptionFormMixin, TenantFormBaseMixin):  # pylint dis
         """Set the deleted field to None and use a HiddenInput widget."""
         self.fields["deleted"].widget = HiddenInput()
         self.fields["deleted"].initial = None
+
+    def _initialize_name_help_text(self):
+        """Append a hint listing reserved default option names that cannot be reused.
+
+        The names come from the form's Meta.model.default_options. Any existing
+        help_text on the name field is preserved and the hint is appended to it.
+        Models with no default options leave the help_text unchanged.
+        """
+        if "name" not in self.fields:
+            return
+        option_model = getattr(getattr(self, "_meta", None), "model", None)
+        if option_model is None:
+            return
+        reserved = get_default_option_names(option_model)
+        if not reserved:
+            return
+        quoted = ", ".join(f'"{name}"' for name in reserved)
+        hint = f"Reserved default names you cannot reuse: {quoted}."
+        existing = self.fields["name"].help_text or ""
+        self.fields["name"].help_text = f"{existing} {hint}".strip() if existing else hint
 
     def clean(self):
         """Ensure option_type is correct even if HiddenField was manipulated."""
