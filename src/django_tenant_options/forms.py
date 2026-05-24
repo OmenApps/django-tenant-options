@@ -197,7 +197,9 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
         self.selection_model = self._meta.model
         self.option_model = apps.get_model(self.selection_model.option_model)
         self.removed_selections = self.option_model.objects.none()
-        self.multiple_choice_field_class = DEFAULT_MULTIPLE_CHOICE_FIELD
+        self.multiple_choice_field_class = (
+            getattr(type(self), "multiple_choice_field_class", None) or DEFAULT_MULTIPLE_CHOICE_FIELD
+        )
         super().__init__(*args, **kwargs)
         self._initialize_selections_field()
         self._remove_option_field()

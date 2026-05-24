@@ -243,6 +243,63 @@ DJANGO_TENANT_OPTIONS = {
 }
 ```
 
+## Grouped option fields
+
+`GroupedOptionsModelMultipleChoiceField` is a drop-in replacement for `OptionsModelMultipleChoiceField` that renders selectable options inside HTML `<optgroup>` groups. This keeps long option catalogs navigable. It subclasses `OptionsModelMultipleChoiceField`, so option labels still show their type suffix (for example `High (mandatory)`) inside each group.
+
+By default it groups by `option_type`, ordering the groups Mandatory -> Optional -> Custom. You can group by any attribute on your option model by passing `group_by`; objects whose attribute is missing or empty fall into an `Uncategorized` group, and the remaining groups are sorted alphabetically.
+
+### Use it project-wide
+
+Point the package setting at the grouped field's dotted path:
+
+```python
+DJANGO_TENANT_OPTIONS = {
+    "DEFAULT_MULTIPLE_CHOICE_FIELD": "django_tenant_options.form_fields.GroupedOptionsModelMultipleChoiceField",
+}
+```
+
+Every `SelectionsForm` then renders grouped selections automatically.
+
+### Use it on a single form
+
+Set the `multiple_choice_field_class` class attribute on a `SelectionsForm` subclass. Forms that do not set it are unaffected:
+
+```python
+from django_tenant_options.forms import SelectionsForm
+from django_tenant_options.form_fields import GroupedOptionsModelMultipleChoiceField
+
+
+class GroupedSelectionsForm(SelectionsForm):
+    multiple_choice_field_class = GroupedOptionsModelMultipleChoiceField
+
+    class Meta:
+        model = TaskPrioritySelection
+```
+
+### Grouping by a custom attribute
+
+If your option model exposes an attribute such as `category` (for example via a metadata mixin), subclass the field with `group_by` defaulted, then reference it from your form:
+
+```python
+from django_tenant_options.form_fields import GroupedOptionsModelMultipleChoiceField
+
+
+class CategoryGroupedField(GroupedOptionsModelMultipleChoiceField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("group_by", "category")
+        super().__init__(*args, **kwargs)
+
+
+class CategorySelectionsForm(SelectionsForm):
+    multiple_choice_field_class = CategoryGroupedField
+
+    class Meta:
+        model = TaskPrioritySelection
+```
+
+If the option model has no `category` attribute, every option simply appears under `Uncategorized` - the field degrades gracefully rather than raising.
+
 ## Common mistakes
 
 ### Forgetting to pass `tenant`
