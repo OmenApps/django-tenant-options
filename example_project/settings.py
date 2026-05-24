@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "example_project.example",
     "example_project.users",
     "django_tenant_options",
+    "rest_framework",
 ]
 
 MIDDLEWARE = [
