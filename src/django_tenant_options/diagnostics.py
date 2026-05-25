@@ -94,6 +94,8 @@ def check_option_model(model, result):
                     f"{name}: Invalid option_type for default option '{option_name}'. "
                     f"Must be OptionType.MANDATORY or OptionType.OPTIONAL, got {config['option_type']}"
                 )
+    elif getattr(model, "default_options_allow_empty", False):
+        result.infos.append(f"{name}: no default_options (intentionally empty)")
     else:
         result.warnings.append(
             f"{name}: No default_options defined. Consider defining mandatory or optional defaults for consistency."

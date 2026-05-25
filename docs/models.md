@@ -40,6 +40,10 @@ Each key is the option name. The value is a dictionary of configuration:
 default_options = {
     "Option Name": {
         "option_type": OptionType.MANDATORY,  # or OptionType.OPTIONAL
+        "sort_order": 10,                     # optional; persisted only if the model has this field
+        "category": "priority",              # optional; persisted only if the model has this field
+        "help_text": "Shown near the field.", # optional; persisted only if the model has this field
+        "description": "Longer docs.",        # optional; persisted only if the model has this field
     },
     "Another Option": {},  # Empty dict defaults to OptionType.MANDATORY
 }
@@ -47,6 +51,18 @@ default_options = {
 
 - If `option_type` is omitted, it defaults to `OptionType.MANDATORY`.
 - Only `OptionType.MANDATORY` and `OptionType.OPTIONAL` are valid here. `OptionType.CUSTOM` is for tenant-created options only.
+- `description`, `help_text`, `sort_order`, and `category` are persisted by `syncoptions` when the concrete Option model defines those fields, such as through `OptionMetadataMixin`. Models without those fields silently ignore the extra keys.
+
+If an Option model intentionally has no default options, set `default_options_allow_empty = True`
+alongside `default_options = {}`. This tells diagnostics and `validateoptions` that the empty
+dictionary is deliberate:
+
+```python
+class HeadOption(AbstractOption):
+    selection_model = "water.HeadSelection"
+    default_options = {}
+    default_options_allow_empty = True
+```
 
 ### Meta class inheritance
 

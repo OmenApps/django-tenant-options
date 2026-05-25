@@ -8,6 +8,7 @@ from django_tenant_options.form_fields import GroupedModelChoiceIterator
 from django_tenant_options.form_fields import GroupedOptionsModelMultipleChoiceField
 from django_tenant_options.form_fields import OptionsModelMultipleChoiceField
 from django_tenant_options.forms import SelectionsForm
+from example_project.example.models import TagSelection
 from example_project.example.models import TaskPriorityOption
 from example_project.example.models import TaskPrioritySelection
 from example_project.example.models import Tenant
@@ -273,6 +274,23 @@ class TestPerFormOptIn:
         assert all(isinstance(group_choices, list) for _, group_choices in choices)
         group_labels = [group_label for group_label, _ in choices]
         assert "Default Mandatory" in group_labels
+
+    def test_multiple_choice_field_kwargs_are_forwarded(self):
+        """multiple_choice_field_kwargs on a SelectionsForm subclass reach the field."""
+
+        class GroupedByCategoryForm(SelectionsForm):
+            __test__ = False
+
+            multiple_choice_field_class = GroupedOptionsModelMultipleChoiceField
+            multiple_choice_field_kwargs = {"group_by": "category"}
+
+            class Meta:
+                model = TagSelection
+
+        tenant = Tenant.objects.create(name="T", subdomain="t")
+        form = GroupedByCategoryForm(tenant=tenant)
+
+        assert form.fields["selections"].group_by == "category"
 
 
 @pytest.mark.django_db

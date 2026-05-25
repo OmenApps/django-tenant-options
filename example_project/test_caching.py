@@ -96,6 +96,21 @@ class TestCacheModule:
         dto_cache.set_cached_option_pks(key, [3, 1, 2])
         assert dto_cache.get_cached_option_pks(key) == [3, 1, 2]
 
+    def test_cache_read_returns_none_when_backend_errors(self, monkeypatch):
+        """A cache backend error during read degrades to a miss, not an exception."""
+        from django_tenant_options import cache as dto_cache
+
+        class _BoomCache:
+            def get(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+            def set(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+        monkeypatch.setattr(dto_cache, "_get_cache", lambda: _BoomCache())
+        assert dto_cache.get_cached_option_pks("dto:any:key") is None
+        dto_cache.set_cached_option_pks("dto:any:key", [1, 2, 3])
+
 
 @pytest.mark.django_db
 class TestSelectedOptionsCaching:

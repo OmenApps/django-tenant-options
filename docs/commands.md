@@ -56,6 +56,7 @@ For each Option model:
 - `selection_model` attribute is set
 - `tenant_model` attribute is set
 - `default_options` format is valid (only `MANDATORY` or `OPTIONAL` types)
+- Empty `default_options` is intentional when `default_options_allow_empty = True`
 - No duplicate default option names in the database
 - Meta class inherits from `AbstractOption.Meta` (checks for expected constraints)
 

@@ -328,15 +328,31 @@ DJANGO_TENANT_OPTIONS = {
 ### How invalidation works
 
 Each Option model has an integer "namespace version" stored in the cache. Every per-tenant cache
-key embeds the current version. On `post_save` and `post_delete` of any Option or Selection
-instance, the package bumps that model's version, which makes all previously cached lists for the
-model unreachable without enumerating individual keys. Because Options soft-delete via `save()`
-(setting the `deleted` timestamp) and hard-delete via `delete(override=True)`, connecting both
-`post_save` and `post_delete` covers every case. Running `python manage.py syncoptions` also fires
-these signals, so default options stay consistent automatically.
+key embeds the current version. Bumping the version makes all previously cached lists for the
+model unreachable without enumerating individual keys. Invalidation fires on these paths:
+
+- **`post_save` / `post_delete` signals** - triggered by per-instance `.save()` and
+  `.delete(override=True)` calls, including the instance-level soft-delete (which calls `.save()`
+  internally).
+- **QuerySet-level soft-delete, hard-delete, and undelete** - `OptionQuerySet.delete()`,
+  `OptionQuerySet.undelete()`, `SelectionQuerySet.delete()`, and `SelectionQuerySet.undelete()`
+  all invalidate explicitly, because bulk `.update()` / `.delete()` bypass Django signals.
+- **`SelectionsForm` deselection path** - `SelectionsForm._delete_removed_selections()` calls a
+  raw `.update()` internally and explicitly invalidates after it.
+- **`python manage.py syncoptions`** - fires signals on each option it touches, so default options
+  stay consistent automatically.
+
+**Remaining caveat:** a raw `.update(deleted=...)` or `.delete()` you write yourself outside these
+helpers bypasses both signals and the QuerySet overrides, so the cache will not be invalidated
+automatically. Call `safe_bump_version` (or `bump_version`) manually after any such raw bulk
+update. There is also a brief window between a version bump and the surrounding database
+transaction committing where another request may observe a stale read - this is inherent to
+cache-aside patterns and is not specific to this package.
 
 Cached entries store only a list of primary keys; reads return a normal QuerySet
 (`Model.objects.filter(pk__in=...)`), so the public API and return types are unchanged.
+If the configured cache backend raises while reading or writing cached option primary keys, the
+package logs a warning and treats the read as a cache miss or the write as a no-op.
 
 ## Further reading
 

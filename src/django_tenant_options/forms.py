@@ -218,6 +218,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
         the defaults below are descriptive enough to be accessible out of the box.
         """
         if "selections" not in self.fields:
+            extra_field_kwargs = getattr(type(self), "multiple_choice_field_kwargs", None) or {}
             self.fields["selections"] = self.multiple_choice_field_class(
                 queryset=self.option_model.objects.none(),
                 required=False,
@@ -226,6 +227,7 @@ class SelectionsForm(TenantFormBaseMixin, forms.Form):
                     "Select the options that should be available to your users. "
                     "Mandatory options are always included and cannot be removed."
                 ),
+                **extra_field_kwargs,
             )
 
     def _remove_option_field(self):

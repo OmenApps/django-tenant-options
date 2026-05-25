@@ -279,20 +279,16 @@ class GroupedSelectionsForm(SelectionsForm):
 
 ### Grouping by a custom attribute
 
-If your option model exposes an attribute such as `category` (for example via a metadata mixin), subclass the field with `group_by` defaulted, then reference it from your form:
+If your option model exposes an attribute such as `category` (for example via a metadata mixin),
+pass `group_by` through `multiple_choice_field_kwargs` on your `SelectionsForm` subclass:
 
 ```python
 from django_tenant_options.form_fields import GroupedOptionsModelMultipleChoiceField
 
 
-class CategoryGroupedField(GroupedOptionsModelMultipleChoiceField):
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("group_by", "category")
-        super().__init__(*args, **kwargs)
-
-
 class CategorySelectionsForm(SelectionsForm):
-    multiple_choice_field_class = CategoryGroupedField
+    multiple_choice_field_class = GroupedOptionsModelMultipleChoiceField
+    multiple_choice_field_kwargs = {"group_by": "category"}
 
     class Meta:
         model = TaskPrioritySelection

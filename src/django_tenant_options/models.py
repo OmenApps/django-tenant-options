@@ -50,6 +50,9 @@ else:
 
 logger = logging.getLogger("django_tenant_options")
 
+METADATA_FIELD_NAMES = ("description", "help_text", "sort_order", "category")
+"""default_options keys that are persisted onto the Option row when the model defines them."""
+
 
 def _validate_model_reference(model_class, field_name, field):
     """Validate that a model reference field is a dotted string path."""
@@ -601,6 +604,7 @@ class OptionManager(_ManagerBase):
 
         Requires a name and options_dict, which may contain the following keys:
         - option_type: OptionType.MANDATORY or OptionType.OPTIONAL
+        - description, help_text, sort_order, category when the concrete model defines those fields
 
         This method can be overridden in subclassed Manager to modify how concrete instances are created, but
           this should not be necessary.
@@ -610,6 +614,8 @@ class OptionManager(_ManagerBase):
 
         # Default to MANDATORY option type
         option_type = OptionType.MANDATORY
+        metadata_defaults = {}
+        model_field_names = {field.name for field in self.model._meta.get_fields()}
 
         # If option_type key is present in the options_dict, validate that it is MANDATORY or OPTIONAL
         #   Note: CUSTOM option types cannot be defined as a default option
@@ -621,11 +627,13 @@ class OptionManager(_ManagerBase):
                         f"Option defaults must be of type `OptionType.MANDATORY` or `OptionType.OPTIONAL`. "
                         f"You specified {key} = {value} for {item_name=}."
                     )
+            elif key in METADATA_FIELD_NAMES and key in model_field_names:
+                metadata_defaults[key] = value
 
         self.model.objects.update_or_create(
             name=item_name,
             option_type=option_type,
-            defaults={"deleted": None},  # Undelete the option if it was previously deleted
+            defaults={"deleted": None, **metadata_defaults},  # Undelete the option if it was previously deleted
         )
 
     def _update_default_options(self) -> dict:

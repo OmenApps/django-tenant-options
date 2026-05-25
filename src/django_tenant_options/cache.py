@@ -101,10 +101,17 @@ def safe_bump_version(option_model_label: str) -> None:
 
 
 def get_cached_option_pks(key: str):
-    """Return the cached list of option pks for a key, or None on a miss."""
-    return _get_cache().get(key)
+    """Return the cached list of option pks for a key, or None on a miss or backend error."""
+    try:
+        return _get_cache().get(key)
+    except Exception:
+        logger.warning("DTO cache read failed for key=%s; treating as miss", key, exc_info=True)
+        return None
 
 
 def set_cached_option_pks(key: str, pks) -> None:
-    """Store a list of option pks under a key with the configured timeout."""
-    _get_cache().set(key, list(pks), app_settings.CACHE_TIMEOUT)
+    """Store a list of option pks under a key; no-op on a backend error."""
+    try:
+        _get_cache().set(key, list(pks), app_settings.CACHE_TIMEOUT)
+    except Exception:
+        logger.warning("DTO cache write failed for key=%s; skipping", key, exc_info=True)

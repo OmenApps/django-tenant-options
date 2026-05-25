@@ -108,6 +108,15 @@ class TestCheckOptionModel:
         check_option_model(model, result)
         assert any("No default_options defined" in w for w in result.warnings)
 
+    def test_empty_default_options_with_allow_empty_marker_is_info_not_warning(self):
+        """A model marked default_options_allow_empty must not produce a warning."""
+        model = self._make_fake(default_options={}, default_options_allow_empty=True)
+        result = DiagnosticsResult()
+        check_option_model(model, result)
+
+        assert "No default_options defined" not in " ".join(result.warnings)
+        assert any("intentionally empty" in info for info in result.infos)
+
     def test_manager_configured_is_info(self):
         """A model with a proper manager records a 'manager configured' info line."""
         model = self._make_fake()

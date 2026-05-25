@@ -5,6 +5,7 @@ import pytest
 from django_tenant_options.choices import OptionType
 from django_tenant_options.mixins import OptionMetadataMixin
 from example_project.example.models import TagOption
+from example_project.example.models import TaskPriorityOption
 
 
 def test_mixin_is_abstract():
@@ -130,3 +131,33 @@ class TestTagOptionMetadata:
         assert reloaded.description == "kept"
         assert reloaded.sort_order == 7
         assert reloaded.category == "A"
+
+    def test_update_or_create_default_option_persists_metadata_keys(self):
+        """Extra metadata keys in default_options are written to the row."""
+        TagOption.objects._update_or_create_default_option(
+            "Seeded With Meta",
+            {
+                "option_type": OptionType.OPTIONAL,
+                "sort_order": 7,
+                "category": "Group A",
+                "help_text": "A seeded option.",
+                "description": "Longer description.",
+            },
+        )
+
+        row = TagOption.objects.get(name="Seeded With Meta")
+        assert row.sort_order == 7
+        assert row.category == "Group A"
+        assert row.help_text == "A seeded option."
+        assert row.description == "Longer description."
+
+    def test_update_or_create_default_option_ignores_metadata_on_plain_model(self):
+        """A model without metadata fields silently ignores extra keys."""
+        assert not hasattr(TaskPriorityOption, "sort_order")
+
+        TaskPriorityOption.objects._update_or_create_default_option(
+            "Plain Seeded",
+            {"option_type": OptionType.OPTIONAL, "sort_order": 5, "category": "X"},
+        )
+
+        assert TaskPriorityOption.objects.filter(name="Plain Seeded").exists()
